@@ -135,7 +135,7 @@
       <dependency>
         <groupId>org.microbean</groupId>
         <artifactId>microbean-bean</artifactId>
-        <version>0.0.16-SNAPSHOT</version>
+        <version>0.0.16</version>
       </dependency>
 
       <dependency>
