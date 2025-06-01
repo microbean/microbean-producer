@@ -26,159 +26,184 @@
 <span class="source-line-no">013</span><span id="line-13"> */</span>
 <span class="source-line-no">014</span><span id="line-14">package org.microbean.producer;</span>
 <span class="source-line-no">015</span><span id="line-15"></span>
-<span class="source-line-no">016</span><span id="line-16">import java.util.SequencedSet;</span>
-<span class="source-line-no">017</span><span id="line-17"></span>
-<span class="source-line-no">018</span><span id="line-18">import org.microbean.bean.Aggregate;</span>
-<span class="source-line-no">019</span><span id="line-19">import org.microbean.bean.Assignment;</span>
-<span class="source-line-no">020</span><span id="line-20">import org.microbean.bean.AttributedElement;</span>
-<span class="source-line-no">021</span><span id="line-21">import org.microbean.bean.Request;</span>
-<span class="source-line-no">022</span><span id="line-22"></span>
-<span class="source-line-no">023</span><span id="line-23">/**</span>
-<span class="source-line-no">024</span><span id="line-24"> * An interface whose implementations {@linkplain #produce(Request) produce} possibly uninitialized contextual</span>
-<span class="source-line-no">025</span><span id="line-25"> * instances.</span>
-<span class="source-line-no">026</span><span id="line-26"> *</span>
-<span class="source-line-no">027</span><span id="line-27"> * &lt;p&gt;{@link Producer}s are used to implement {@link org.microbean.bean.Factory} instances' {@link</span>
-<span class="source-line-no">028</span><span id="line-28"> * org.microbean.bean.Factory#create(Request) create(Request)} and {@link org.microbean.bean.Factory#destroy(Object,</span>
-<span class="source-line-no">029</span><span id="line-29"> * Request) destroy(Object, Request)} methods. Values returned from the {@link #produce(Request)} method are often</span>
-<span class="source-line-no">030</span><span id="line-30"> * supplied to {@link Initializer}s.&lt;/p&gt;</span>
-<span class="source-line-no">031</span><span id="line-31"> *</span>
-<span class="source-line-no">032</span><span id="line-32"> * @param &lt;I&gt; the type of contextual instance</span>
-<span class="source-line-no">033</span><span id="line-33"> *</span>
-<span class="source-line-no">034</span><span id="line-34"> * @author &lt;a href="https://about.me/lairdnelson" target="_top"&gt;Laird Nelson&lt;/a&gt;</span>
+<span class="source-line-no">016</span><span id="line-16">import java.util.LinkedHashSet;</span>
+<span class="source-line-no">017</span><span id="line-17">import java.util.SequencedSet;</span>
+<span class="source-line-no">018</span><span id="line-18"></span>
+<span class="source-line-no">019</span><span id="line-19">import java.util.function.Function;</span>
+<span class="source-line-no">020</span><span id="line-20"></span>
+<span class="source-line-no">021</span><span id="line-21">import org.microbean.bean.Aggregate;</span>
+<span class="source-line-no">022</span><span id="line-22">import org.microbean.bean.Assignment;</span>
+<span class="source-line-no">023</span><span id="line-23">import org.microbean.bean.AttributedElement;</span>
+<span class="source-line-no">024</span><span id="line-24">import org.microbean.bean.AttributedType;</span>
+<span class="source-line-no">025</span><span id="line-25">import org.microbean.bean.Creation;</span>
+<span class="source-line-no">026</span><span id="line-26">import org.microbean.bean.Destruction;</span>
+<span class="source-line-no">027</span><span id="line-27">import org.microbean.bean.Id;</span>
+<span class="source-line-no">028</span><span id="line-28">import org.microbean.bean.ReferencesSelector;</span>
+<span class="source-line-no">029</span><span id="line-29"></span>
+<span class="source-line-no">030</span><span id="line-30">import static java.util.Collections.unmodifiableSequencedSet;</span>
+<span class="source-line-no">031</span><span id="line-31"></span>
+<span class="source-line-no">032</span><span id="line-32">/**</span>
+<span class="source-line-no">033</span><span id="line-33"> * An interface whose implementations {@linkplain #produce(Creation) produce} and commonly initialize contextual</span>
+<span class="source-line-no">034</span><span id="line-34"> * instances.</span>
 <span class="source-line-no">035</span><span id="line-35"> *</span>
-<span class="source-line-no">036</span><span id="line-36"> * @see #produce(Request)</span>
-<span class="source-line-no">037</span><span id="line-37"> *</span>
-<span class="source-line-no">038</span><span id="line-38"> * @see org.microbean.bean.Factory#create(Request)</span>
-<span class="source-line-no">039</span><span id="line-39"> */</span>
-<span class="source-line-no">040</span><span id="line-40">// Subordinate to Factory&lt;I&gt; (really to Initializer&lt;I&gt;)</span>
-<span class="source-line-no">041</span><span id="line-41">// Akin to CDI's Producer.</span>
-<span class="source-line-no">042</span><span id="line-42">// Handles instance production and disposal, *including intercepted production*.</span>
-<span class="source-line-no">043</span><span id="line-43">//</span>
-<span class="source-line-no">044</span><span id="line-44">// Does NOT handle initialization; see for example</span>
-<span class="source-line-no">045</span><span id="line-45">// https://github.com/search?q=repo%3Aweld%2Fcore+%22.produce%28%29%22+language%3AJava&amp;type=code. Obviously it may</span>
-<span class="source-line-no">046</span><span id="line-46">// acquire dependencies and supply them during production, but the point is it doesn't do field injection or initializer</span>
-<span class="source-line-no">047</span><span id="line-47">// method invocation.</span>
-<span class="source-line-no">048</span><span id="line-48">//</span>
-<span class="source-line-no">049</span><span id="line-49">// Does NOT handle post-initialization.</span>
-<span class="source-line-no">050</span><span id="line-50">// Does NOT handle business method interception.</span>
-<span class="source-line-no">051</span><span id="line-51">// Does NOT handle pre-disposal.</span>
-<span class="source-line-no">052</span><span id="line-52">// See also: InterceptingProducer</span>
-<span class="source-line-no">053</span><span id="line-53">@FunctionalInterface</span>
-<span class="source-line-no">054</span><span id="line-54">public interface Producer&lt;I&gt; extends Aggregate {</span>
-<span class="source-line-no">055</span><span id="line-55"></span>
-<span class="source-line-no">056</span><span id="line-56">  /**</span>
-<span class="source-line-no">057</span><span id="line-57">   * A convenience method that assigns a contextual reference to each of this {@link Aggregate}'s {@link</span>
-<span class="source-line-no">058</span><span id="line-58">   * org.microbean.bean.AttributedElement} instances and returns the resulting {@link SequencedSet} of {@link</span>
-<span class="source-line-no">059</span><span id="line-59">   * Assignment}s.</span>
-<span class="source-line-no">060</span><span id="line-60">   *</span>
-<span class="source-line-no">061</span><span id="line-61">   * &lt;p&gt;Typically there is no need to override this method.&lt;/p&gt;</span>
-<span class="source-line-no">062</span><span id="line-62">   *</span>
-<span class="source-line-no">063</span><span id="line-63">   * @param r a {@link Request} that retrieves a contextual reference suitable for an {@link</span>
-<span class="source-line-no">064</span><span id="line-64">   * org.microbean.bean.AttributedType}; must not be {@code null}</span>
-<span class="source-line-no">065</span><span id="line-65">   *</span>
-<span class="source-line-no">066</span><span id="line-66">   * @return an immutable {@link SequencedSet} of {@link Assignment} instances; never {@code null}</span>
-<span class="source-line-no">067</span><span id="line-67">   *</span>
-<span class="source-line-no">068</span><span id="line-68">   * @exception NullPointerException if {@code r} is {@code null}</span>
+<span class="source-line-no">036</span><span id="line-36"> * &lt;p&gt;{@link Producer}s are used to implement {@link org.microbean.bean.Factory} instances' {@link</span>
+<span class="source-line-no">037</span><span id="line-37"> * org.microbean.bean.Factory#create(Creation) create(Creation)} and {@link org.microbean.bean.Factory#destroy(Object,</span>
+<span class="source-line-no">038</span><span id="line-38"> * Destruction) destroy(Object, Destruction)} methods.&lt;/p&gt;</span>
+<span class="source-line-no">039</span><span id="line-39"> *</span>
+<span class="source-line-no">040</span><span id="line-40"> * &lt;p&gt;A {@link Producer} normally initializes the contextual instances it produces as part of its {@link</span>
+<span class="source-line-no">041</span><span id="line-41"> * #produce(Creation)} method implementation, but is not required to.&lt;/p&gt;</span>
+<span class="source-line-no">042</span><span id="line-42"> *</span>
+<span class="source-line-no">043</span><span id="line-43"> * @param &lt;I&gt; the contextual instance type</span>
+<span class="source-line-no">044</span><span id="line-44"> *</span>
+<span class="source-line-no">045</span><span id="line-45"> * @author &lt;a href="https://about.me/lairdnelson" target="_top"&gt;Laird Nelson&lt;/a&gt;</span>
+<span class="source-line-no">046</span><span id="line-46"> *</span>
+<span class="source-line-no">047</span><span id="line-47"> * @see #produce(Creation)</span>
+<span class="source-line-no">048</span><span id="line-48"> *</span>
+<span class="source-line-no">049</span><span id="line-49"> * @see #dependencies()</span>
+<span class="source-line-no">050</span><span id="line-50"> *</span>
+<span class="source-line-no">051</span><span id="line-51"> * @see #dispose(Object, Destruction)</span>
+<span class="source-line-no">052</span><span id="line-52"> *</span>
+<span class="source-line-no">053</span><span id="line-53"> * @see org.microbean.bean.Factory#create(Creation)</span>
+<span class="source-line-no">054</span><span id="line-54"> */</span>
+<span class="source-line-no">055</span><span id="line-55">// Subordinate to Factory&lt;I&gt; (but looking more and more like it every day)</span>
+<span class="source-line-no">056</span><span id="line-56">// Akin to CDI's Producer.</span>
+<span class="source-line-no">057</span><span id="line-57">// Handles instance production, interception and disposal, *including intercepted production*.</span>
+<span class="source-line-no">058</span><span id="line-58">//</span>
+<span class="source-line-no">059</span><span id="line-59">// Also handles initialization. We may want to revisit this. See for example</span>
+<span class="source-line-no">060</span><span id="line-60">// https://github.com/search?q=repo%3Aweld%2Fcore+%22.produce%28%29%22+language%3AJava&amp;type=code</span>
+<span class="source-line-no">061</span><span id="line-61">//</span>
+<span class="source-line-no">062</span><span id="line-62">// See also: InterceptingProducer</span>
+<span class="source-line-no">063</span><span id="line-63">public interface Producer&lt;I&gt; extends Aggregate {</span>
+<span class="source-line-no">064</span><span id="line-64"></span>
+<span class="source-line-no">065</span><span id="line-65">  /**</span>
+<span class="source-line-no">066</span><span id="line-66">   * A convenience method that returns an immutable, determinate {@link SequencedSet} of {@link AttributedElement}s</span>
+<span class="source-line-no">067</span><span id="line-67">   * consisting of this {@link Producer}'s {@linkplain #productionDependencies() production dependencies} followed by</span>
+<span class="source-line-no">068</span><span id="line-68">   * its {@linkplain #initializationDependencies() initialization dependencies}.</span>
 <span class="source-line-no">069</span><span id="line-69">   *</span>
-<span class="source-line-no">070</span><span id="line-70">   * @see #assign(java.util.function.Function)</span>
-<span class="source-line-no">071</span><span id="line-71">   */</span>
-<span class="source-line-no">072</span><span id="line-72">  public default SequencedSet&lt;? extends Assignment&lt;?&gt;&gt; assign(final Request&lt;?&gt; r) {</span>
-<span class="source-line-no">073</span><span id="line-73">    return this.assign(r::reference);</span>
-<span class="source-line-no">074</span><span id="line-74">  }</span>
-<span class="source-line-no">075</span><span id="line-75"></span>
-<span class="source-line-no">076</span><span id="line-76">  /**</span>
-<span class="source-line-no">077</span><span id="line-77">   * Returns an immutable {@link SequencedSet} of {@link AttributedElement} instances &lt;strong&gt;required for instance</span>
-<span class="source-line-no">078</span><span id="line-78">   * creation only&lt;/strong&gt;.</span>
-<span class="source-line-no">079</span><span id="line-79">   *</span>
-<span class="source-line-no">080</span><span id="line-80">   * &lt;p&gt;The returned {@link SequencedSet} may be, and often is, empty.&lt;/p&gt;</span>
-<span class="source-line-no">081</span><span id="line-81">   *</span>
-<span class="source-line-no">082</span><span id="line-82">   * &lt;p&gt;Overriding this method is normal and expected.&lt;/p&gt;</span>
-<span class="source-line-no">083</span><span id="line-83">   *</span>
-<span class="source-line-no">084</span><span id="line-84">   * &lt;p&gt;Any overrides of this method must return determinate values.&lt;/p&gt;</span>
-<span class="source-line-no">085</span><span id="line-85">   *</span>
-<span class="source-line-no">086</span><span id="line-86">   * @return an immutable {@link SequencedSet} of {@link AttributedElement} instances; never {@code null}</span>
-<span class="source-line-no">087</span><span id="line-87">   *</span>
-<span class="source-line-no">088</span><span id="line-88">   * @see Aggregate#dependencies()</span>
-<span class="source-line-no">089</span><span id="line-89">   *</span>
-<span class="source-line-no">090</span><span id="line-90">   * @see #assign(java.util.function.Function)</span>
-<span class="source-line-no">091</span><span id="line-91">   *</span>
-<span class="source-line-no">092</span><span id="line-92">   * @see #produce(SequencedSet)</span>
-<span class="source-line-no">093</span><span id="line-93">   *</span>
-<span class="source-line-no">094</span><span id="line-94">   * @see AttributedElement</span>
-<span class="source-line-no">095</span><span id="line-95">   */</span>
-<span class="source-line-no">096</span><span id="line-96">  @Override // Aggregate</span>
-<span class="source-line-no">097</span><span id="line-97">  public default SequencedSet&lt;AttributedElement&gt; dependencies() {</span>
-<span class="source-line-no">098</span><span id="line-98">    return Aggregate.super.dependencies();</span>
-<span class="source-line-no">099</span><span id="line-99">  }</span>
-<span class="source-line-no">100</span><span id="line-100"></span>
-<span class="source-line-no">101</span><span id="line-101">  /**</span>
-<span class="source-line-no">102</span><span id="line-102">   * Disposes of the supplied contextual instance.</span>
-<span class="source-line-no">103</span><span id="line-103">   *</span>
-<span class="source-line-no">104</span><span id="line-104">   * &lt;p&gt;The default implementation of this method checks to see if {@code i} is an instance of {@link AutoCloseable},</span>
-<span class="source-line-no">105</span><span id="line-105">   * and, if so, calls {@link AutoCloseable#close() close()} on it, throwing any resulting exception as a {@link</span>
-<span class="source-line-no">106</span><span id="line-106">   * DisposalException}.&lt;/p&gt;</span>
+<span class="source-line-no">070</span><span id="line-70">   * &lt;p&gt;There is normally no need to override the default implementation of this method.&lt;/p&gt;</span>
+<span class="source-line-no">071</span><span id="line-71">   *</span>
+<span class="source-line-no">072</span><span id="line-72">   * @return a non-{@code null}, immutable, determinate {@link SequencedSet} of {@link AttributedElement}s consisting of</span>
+<span class="source-line-no">073</span><span id="line-73">   * this {@link Producer}'s {@linkplain #productionDependencies() production dependencies} followed by its {@linkplain</span>
+<span class="source-line-no">074</span><span id="line-74">   * #initializationDependencies() initialization dependencies}</span>
+<span class="source-line-no">075</span><span id="line-75">   *</span>
+<span class="source-line-no">076</span><span id="line-76">   * @see #productionDependencies()</span>
+<span class="source-line-no">077</span><span id="line-77">   *</span>
+<span class="source-line-no">078</span><span id="line-78">   * @see #initializationDependencies()</span>
+<span class="source-line-no">079</span><span id="line-79">   */</span>
+<span class="source-line-no">080</span><span id="line-80">  @Override // Aggregate</span>
+<span class="source-line-no">081</span><span id="line-81">  public default SequencedSet&lt;AttributedElement&gt; dependencies() {</span>
+<span class="source-line-no">082</span><span id="line-82">    final SequencedSet&lt;AttributedElement&gt; productionDependencies = this.productionDependencies();</span>
+<span class="source-line-no">083</span><span id="line-83">    final SequencedSet&lt;AttributedElement&gt; initializationDependencies = this.initializationDependencies();</span>
+<span class="source-line-no">084</span><span id="line-84">    if (productionDependencies.isEmpty()) {</span>
+<span class="source-line-no">085</span><span id="line-85">      return initializationDependencies;</span>
+<span class="source-line-no">086</span><span id="line-86">    } else if (initializationDependencies.isEmpty()) {</span>
+<span class="source-line-no">087</span><span id="line-87">      return productionDependencies;</span>
+<span class="source-line-no">088</span><span id="line-88">    }</span>
+<span class="source-line-no">089</span><span id="line-89">    final LinkedHashSet&lt;AttributedElement&gt; d = new LinkedHashSet&lt;&gt;();</span>
+<span class="source-line-no">090</span><span id="line-90">    d.addAll(productionDependencies);</span>
+<span class="source-line-no">091</span><span id="line-91">    d.addAll(initializationDependencies);</span>
+<span class="source-line-no">092</span><span id="line-92">    return unmodifiableSequencedSet(d);</span>
+<span class="source-line-no">093</span><span id="line-93">  }</span>
+<span class="source-line-no">094</span><span id="line-94"></span>
+<span class="source-line-no">095</span><span id="line-95">  /**</span>
+<span class="source-line-no">096</span><span id="line-96">   * Disposes of the supplied contextual instance.</span>
+<span class="source-line-no">097</span><span id="line-97">   *</span>
+<span class="source-line-no">098</span><span id="line-98">   * &lt;p&gt;The default implementation of this method checks to see if {@code i} is an instance of {@link AutoCloseable},</span>
+<span class="source-line-no">099</span><span id="line-99">   * and, if so, calls {@link AutoCloseable#close() close()} on it, throwing any resulting exception as a {@link</span>
+<span class="source-line-no">100</span><span id="line-100">   * DisposalException}.&lt;/p&gt;</span>
+<span class="source-line-no">101</span><span id="line-101">   *</span>
+<span class="source-line-no">102</span><span id="line-102">   * @param i a contextual instance {@linkplain #produce(Creation) produced} by this {@link Producer}; may be {@code</span>
+<span class="source-line-no">103</span><span id="line-103">   * null}</span>
+<span class="source-line-no">104</span><span id="line-104">   *</span>
+<span class="source-line-no">105</span><span id="line-105">   * @param r the {@link Creation} that was {@linkplain #produce(Creation) present at production time}; must not be {@code</span>
+<span class="source-line-no">106</span><span id="line-106">   * null}</span>
 <span class="source-line-no">107</span><span id="line-107">   *</span>
-<span class="source-line-no">108</span><span id="line-108">   * @param i a contextual instance {@linkplain #produce(Request) produced} by this {@link Producer}; may be {@code</span>
-<span class="source-line-no">109</span><span id="line-109">   * null}</span>
-<span class="source-line-no">110</span><span id="line-110">   *</span>
-<span class="source-line-no">111</span><span id="line-111">   * @param r the {@link Request} that was {@linkplain #produce(Request) present at production time}; must not be {@code</span>
-<span class="source-line-no">112</span><span id="line-112">   * null}</span>
-<span class="source-line-no">113</span><span id="line-113">   *</span>
-<span class="source-line-no">114</span><span id="line-114">   * @exception NullPointerException if {@code r} is {@code null}</span>
-<span class="source-line-no">115</span><span id="line-115">   *</span>
-<span class="source-line-no">116</span><span id="line-116">   * @exception DisposalException if {@code i} is an {@link AutoCloseable} instance, and if its {@link</span>
-<span class="source-line-no">117</span><span id="line-117">   * AutoCloseable#close() close()} method throws a checked exception</span>
-<span class="source-line-no">118</span><span id="line-118">   */</span>
-<span class="source-line-no">119</span><span id="line-119">  public default void dispose(final I i, final Request&lt;I&gt; r) {</span>
-<span class="source-line-no">120</span><span id="line-120">    if (i instanceof AutoCloseable ac) {</span>
-<span class="source-line-no">121</span><span id="line-121">      try {</span>
-<span class="source-line-no">122</span><span id="line-122">        ac.close();</span>
-<span class="source-line-no">123</span><span id="line-123">      } catch (final RuntimeException | Error e) {</span>
-<span class="source-line-no">124</span><span id="line-124">        throw e;</span>
-<span class="source-line-no">125</span><span id="line-125">      } catch (final InterruptedException e) {</span>
-<span class="source-line-no">126</span><span id="line-126">        Thread.currentThread().interrupt();</span>
-<span class="source-line-no">127</span><span id="line-127">        throw new DisposalException(e.getMessage(), e);</span>
-<span class="source-line-no">128</span><span id="line-128">      } catch (final Exception e) {</span>
-<span class="source-line-no">129</span><span id="line-129">        throw new DisposalException(e.getMessage(), e);</span>
-<span class="source-line-no">130</span><span id="line-130">      }</span>
-<span class="source-line-no">131</span><span id="line-131">    }</span>
-<span class="source-line-no">132</span><span id="line-132">  }</span>
-<span class="source-line-no">133</span><span id="line-133"></span>
-<span class="source-line-no">134</span><span id="line-134">  /**</span>
-<span class="source-line-no">135</span><span id="line-135">   * Produces a new contextual instance and returns it by calling the {@link #produce(SequencedSet)} method with the</span>
-<span class="source-line-no">136</span><span id="line-136">   * return value of an invocation of the {@link #assign(Function)} method with a reference to the supplied {@link</span>
-<span class="source-line-no">137</span><span id="line-137">   * Request}'s {@link Request#reference(AttributedType)} method.</span>
+<span class="source-line-no">108</span><span id="line-108">   * @exception NullPointerException if {@code r} is {@code null}</span>
+<span class="source-line-no">109</span><span id="line-109">   *</span>
+<span class="source-line-no">110</span><span id="line-110">   * @exception DisposalException if {@code i} is an {@link AutoCloseable} instance, and if its {@link</span>
+<span class="source-line-no">111</span><span id="line-111">   * AutoCloseable#close() close()} method throws a checked exception</span>
+<span class="source-line-no">112</span><span id="line-112">   */</span>
+<span class="source-line-no">113</span><span id="line-113">  public default void dispose(final I i, final Destruction r) {</span>
+<span class="source-line-no">114</span><span id="line-114">    if (i instanceof AutoCloseable ac) {</span>
+<span class="source-line-no">115</span><span id="line-115">      try {</span>
+<span class="source-line-no">116</span><span id="line-116">        ac.close();</span>
+<span class="source-line-no">117</span><span id="line-117">      } catch (final RuntimeException | Error e) {</span>
+<span class="source-line-no">118</span><span id="line-118">        throw e;</span>
+<span class="source-line-no">119</span><span id="line-119">      } catch (final InterruptedException e) {</span>
+<span class="source-line-no">120</span><span id="line-120">        Thread.currentThread().interrupt();</span>
+<span class="source-line-no">121</span><span id="line-121">        throw new DisposalException(e.getMessage(), e);</span>
+<span class="source-line-no">122</span><span id="line-122">      } catch (final Exception e) {</span>
+<span class="source-line-no">123</span><span id="line-123">        throw new DisposalException(e.getMessage(), e);</span>
+<span class="source-line-no">124</span><span id="line-124">      }</span>
+<span class="source-line-no">125</span><span id="line-125">    }</span>
+<span class="source-line-no">126</span><span id="line-126">  }</span>
+<span class="source-line-no">127</span><span id="line-127"></span>
+<span class="source-line-no">128</span><span id="line-128">  /**</span>
+<span class="source-line-no">129</span><span id="line-129">   * Returns an immutable, determinate {@link SequencedSet} of {@link AttributedElement}s representing dependencies</span>
+<span class="source-line-no">130</span><span id="line-130">   * required for initialization.</span>
+<span class="source-line-no">131</span><span id="line-131">   *</span>
+<span class="source-line-no">132</span><span id="line-132">   * &lt;p&gt;Such dependencies may represent initialization method parameters and/or fields.&lt;/p&gt;</span>
+<span class="source-line-no">133</span><span id="line-133">   *</span>
+<span class="source-line-no">134</span><span id="line-134">   * &lt;p&gt;Contrast initialization dependencies with &lt;dfn&gt;production dependencies&lt;/dfn&gt;.&lt;/p&gt;</span>
+<span class="source-line-no">135</span><span id="line-135">   *</span>
+<span class="source-line-no">136</span><span id="line-136">   * @return a non-{@code null}, immutable, determinate {@link SequencedSet} of {@link AttributedElement}s representing</span>
+<span class="source-line-no">137</span><span id="line-137">   * dependencies required for initialization</span>
 <span class="source-line-no">138</span><span id="line-138">   *</span>
-<span class="source-line-no">139</span><span id="line-139">   * @param r a {@link Request}; must not be {@code null}</span>
-<span class="source-line-no">140</span><span id="line-140">   *</span>
-<span class="source-line-no">141</span><span id="line-141">   * @return a new contextual instance, or {@code null}</span>
-<span class="source-line-no">142</span><span id="line-142">   *</span>
-<span class="source-line-no">143</span><span id="line-143">   * @exception NullPointerException if {@code r} is {@code null}</span>
-<span class="source-line-no">144</span><span id="line-144">   *</span>
-<span class="source-line-no">145</span><span id="line-145">   * @see #produce(SequencedSet)</span>
-<span class="source-line-no">146</span><span id="line-146">   *</span>
-<span class="source-line-no">147</span><span id="line-147">   * @see #assign(Request)</span>
-<span class="source-line-no">148</span><span id="line-148">   */</span>
-<span class="source-line-no">149</span><span id="line-149">  public default I produce(final Request&lt;?&gt; r) {</span>
-<span class="source-line-no">150</span><span id="line-150">    return this.produce(this.assign(r));</span>
-<span class="source-line-no">151</span><span id="line-151">  }</span>
-<span class="source-line-no">152</span><span id="line-152"></span>
-<span class="source-line-no">153</span><span id="line-153">  /**</span>
-<span class="source-line-no">154</span><span id="line-154">   * Produces a new contextual instance and returns it, possibly (often) making use of the supplied, dependent,</span>
-<span class="source-line-no">155</span><span id="line-155">   * contextual references.</span>
-<span class="source-line-no">156</span><span id="line-156">   *</span>
-<span class="source-line-no">157</span><span id="line-157">   * &lt;p&gt;Implementations of this method must not call {@link #produce(Request)} or an infinite loop may result.&lt;/p&gt;</span>
-<span class="source-line-no">158</span><span id="line-158">   *</span>
-<span class="source-line-no">159</span><span id="line-159">   * @param assignments a {@link SequencedSet} of {@link Assignment}s this {@link Producer} needs &lt;strong&gt;only to create</span>
-<span class="source-line-no">160</span><span id="line-160">   * the contextual instance&lt;/strong&gt;; must not be {@code null}</span>
-<span class="source-line-no">161</span><span id="line-161">   *</span>
-<span class="source-line-no">162</span><span id="line-162">   * @return a new contextual instance, or {@code null}</span>
-<span class="source-line-no">163</span><span id="line-163">   *</span>
-<span class="source-line-no">164</span><span id="line-164">   * @exception NullPointerException if {@code dependentContextualReferences} is {@code null}</span>
-<span class="source-line-no">165</span><span id="line-165">   */</span>
-<span class="source-line-no">166</span><span id="line-166">  public I produce(final SequencedSet&lt;? extends Assignment&lt;?&gt;&gt; assignments);</span>
-<span class="source-line-no">167</span><span id="line-167"></span>
-<span class="source-line-no">168</span><span id="line-168">}</span>
+<span class="source-line-no">139</span><span id="line-139">   * @see #productionDependencies()</span>
+<span class="source-line-no">140</span><span id="line-140">   */</span>
+<span class="source-line-no">141</span><span id="line-141">  public SequencedSet&lt;AttributedElement&gt; initializationDependencies();</span>
+<span class="source-line-no">142</span><span id="line-142"></span>
+<span class="source-line-no">143</span><span id="line-143">  /**</span>
+<span class="source-line-no">144</span><span id="line-144">   * Produces a new contextual instance and returns it by calling the {@link #produce(Id, SequencedSet)} method with the</span>
+<span class="source-line-no">145</span><span id="line-145">   * return value of an invocation of the {@link #assign(Function)} method with a reference to the supplied {@link</span>
+<span class="source-line-no">146</span><span id="line-146">   * Creation}'s {@link ReferencesSelector#reference(AttributedType) reference(AttributedType)} method.</span>
+<span class="source-line-no">147</span><span id="line-147">   *</span>
+<span class="source-line-no">148</span><span id="line-148">   * @param c a {@link Creation}; must not be {@code null}</span>
+<span class="source-line-no">149</span><span id="line-149">   *</span>
+<span class="source-line-no">150</span><span id="line-150">   * @return a new contextual instance, or {@code null}</span>
+<span class="source-line-no">151</span><span id="line-151">   *</span>
+<span class="source-line-no">152</span><span id="line-152">   * @exception NullPointerException if {@code c} is {@code null}</span>
+<span class="source-line-no">153</span><span id="line-153">   *</span>
+<span class="source-line-no">154</span><span id="line-154">   * @see #produce(Id, SequencedSet)</span>
+<span class="source-line-no">155</span><span id="line-155">   *</span>
+<span class="source-line-no">156</span><span id="line-156">   * @see #dependencies()</span>
+<span class="source-line-no">157</span><span id="line-157">   */</span>
+<span class="source-line-no">158</span><span id="line-158">  public default I produce(final Creation&lt;I&gt; c) {</span>
+<span class="source-line-no">159</span><span id="line-159">    return this.produce(c.id(), this.assign(c::reference));</span>
+<span class="source-line-no">160</span><span id="line-160">  }</span>
+<span class="source-line-no">161</span><span id="line-161"></span>
+<span class="source-line-no">162</span><span id="line-162">  /**</span>
+<span class="source-line-no">163</span><span id="line-163">   * Produces a new contextual instance and returns it, possibly (often) making use of the supplied assignments.</span>
+<span class="source-line-no">164</span><span id="line-164">   *</span>
+<span class="source-line-no">165</span><span id="line-165">   * &lt;p&gt;Implementations of this method must not call {@link #produce(Creation)} or an infinite loop may result.&lt;/p&gt;</span>
+<span class="source-line-no">166</span><span id="line-166">   *</span>
+<span class="source-line-no">167</span><span id="line-167">   * @param id an {@link Id} for which production is occurring; must not be {@code null}</span>
+<span class="source-line-no">168</span><span id="line-168">   *</span>
+<span class="source-line-no">169</span><span id="line-169">   * @param assignments a {@link SequencedSet} of {@link Assignment}s this {@link Producer} needs to complete production</span>
+<span class="source-line-no">170</span><span id="line-170">   * and possibly initialization; must not be {@code null}</span>
+<span class="source-line-no">171</span><span id="line-171">   *</span>
+<span class="source-line-no">172</span><span id="line-172">   * @return a new contextual instance, or {@code null}</span>
+<span class="source-line-no">173</span><span id="line-173">   *</span>
+<span class="source-line-no">174</span><span id="line-174">   * @exception NullPointerException if {@code assignments} is {@code null}</span>
+<span class="source-line-no">175</span><span id="line-175">   */</span>
+<span class="source-line-no">176</span><span id="line-176">  public I produce(final Id id, final SequencedSet&lt;? extends Assignment&lt;?&gt;&gt; assignments);</span>
+<span class="source-line-no">177</span><span id="line-177"></span>
+<span class="source-line-no">178</span><span id="line-178">  /**</span>
+<span class="source-line-no">179</span><span id="line-179">   * Returns an immutable, determinate {@link SequencedSet} of {@link AttributedElement}s representing dependencies</span>
+<span class="source-line-no">180</span><span id="line-180">   * required for production.</span>
+<span class="source-line-no">181</span><span id="line-181">   *</span>
+<span class="source-line-no">182</span><span id="line-182">   * &lt;p&gt;Such dependencies normally represent constructor parameters.&lt;/p&gt;</span>
+<span class="source-line-no">183</span><span id="line-183">   *</span>
+<span class="source-line-no">184</span><span id="line-184">   * &lt;p&gt;Contrast production dependencies with &lt;dfn&gt;initialization dependencies&lt;/dfn&gt;.&lt;/p&gt;</span>
+<span class="source-line-no">185</span><span id="line-185">   *</span>
+<span class="source-line-no">186</span><span id="line-186">   * @return a non-{@code null}, immutable, determinate {@link SequencedSet} of {@link AttributedElement}s representing</span>
+<span class="source-line-no">187</span><span id="line-187">   * dependencies required for production</span>
+<span class="source-line-no">188</span><span id="line-188">   *</span>
+<span class="source-line-no">189</span><span id="line-189">   * @see #initializationDependencies()</span>
+<span class="source-line-no">190</span><span id="line-190">   */</span>
+<span class="source-line-no">191</span><span id="line-191">  public SequencedSet&lt;AttributedElement&gt; productionDependencies();</span>
+<span class="source-line-no">192</span><span id="line-192"></span>
+<span class="source-line-no">193</span><span id="line-193">}</span>
 
 
 

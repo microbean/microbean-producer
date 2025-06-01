@@ -26,173 +26,448 @@
 <span class="source-line-no">013</span><span id="line-13"> */</span>
 <span class="source-line-no">014</span><span id="line-14">package org.microbean.producer;</span>
 <span class="source-line-no">015</span><span id="line-15"></span>
-<span class="source-line-no">016</span><span id="line-16">import java.util.Collection;</span>
-<span class="source-line-no">017</span><span id="line-17">import java.util.Collections;</span>
-<span class="source-line-no">018</span><span id="line-18">import java.util.LinkedHashSet;</span>
-<span class="source-line-no">019</span><span id="line-19">import java.util.Objects;</span>
-<span class="source-line-no">020</span><span id="line-20">import java.util.SequencedSet;</span>
-<span class="source-line-no">021</span><span id="line-21"></span>
-<span class="source-line-no">022</span><span id="line-22">import java.util.function.Function;</span>
-<span class="source-line-no">023</span><span id="line-23"></span>
-<span class="source-line-no">024</span><span id="line-24">import org.microbean.bean.AttributedElement;</span>
-<span class="source-line-no">025</span><span id="line-25">import org.microbean.bean.AttributedType;</span>
-<span class="source-line-no">026</span><span id="line-26">import org.microbean.bean.Assignment;</span>
-<span class="source-line-no">027</span><span id="line-27">import org.microbean.bean.Request;</span>
+<span class="source-line-no">016</span><span id="line-16">import java.util.ArrayList;</span>
+<span class="source-line-no">017</span><span id="line-17">import java.util.Arrays;</span>
+<span class="source-line-no">018</span><span id="line-18">import java.util.Collection;</span>
+<span class="source-line-no">019</span><span id="line-19">import java.util.Collections;</span>
+<span class="source-line-no">020</span><span id="line-20">import java.util.LinkedHashSet;</span>
+<span class="source-line-no">021</span><span id="line-21">import java.util.List;</span>
+<span class="source-line-no">022</span><span id="line-22">import java.util.Map;</span>
+<span class="source-line-no">023</span><span id="line-23">import java.util.Map.Entry;</span>
+<span class="source-line-no">024</span><span id="line-24">import java.util.Objects;</span>
+<span class="source-line-no">025</span><span id="line-25">import java.util.Set;</span>
+<span class="source-line-no">026</span><span id="line-26">import java.util.SequencedSet;</span>
+<span class="source-line-no">027</span><span id="line-27">import java.util.StringJoiner;</span>
 <span class="source-line-no">028</span><span id="line-28"></span>
-<span class="source-line-no">029</span><span id="line-29">import org.microbean.interceptor.InterceptionFunction;</span>
-<span class="source-line-no">030</span><span id="line-30">import org.microbean.interceptor.InterceptorMethod;</span>
-<span class="source-line-no">031</span><span id="line-31"></span>
-<span class="source-line-no">032</span><span id="line-32">import static org.microbean.interceptor.Interceptions.ofConstruction;</span>
-<span class="source-line-no">033</span><span id="line-33"></span>
-<span class="source-line-no">034</span><span id="line-34">/**</span>
-<span class="source-line-no">035</span><span id="line-35"> * A {@link Producer} that applies constructor interception to produce contextual instances.</span>
-<span class="source-line-no">036</span><span id="line-36"> *</span>
-<span class="source-line-no">037</span><span id="line-37"> * @param &lt;I&gt; the type of contextual instance</span>
-<span class="source-line-no">038</span><span id="line-38"> *</span>
-<span class="source-line-no">039</span><span id="line-39"> * @author &lt;a href="https://about.me/lairdnelson" target="_top"&gt;Laird Nelson&lt;/a&gt;</span>
-<span class="source-line-no">040</span><span id="line-40"> *</span>
-<span class="source-line-no">041</span><span id="line-41"> * @see InterceptorMethod</span>
-<span class="source-line-no">042</span><span id="line-42"> */</span>
-<span class="source-line-no">043</span><span id="line-43">// Applies around-construct logic to contextual instance production.</span>
-<span class="source-line-no">044</span><span id="line-44">public final class InterceptingProducer&lt;I&gt; implements Producer&lt;I&gt; {</span>
+<span class="source-line-no">029</span><span id="line-29">import java.util.concurrent.ConcurrentHashMap;</span>
+<span class="source-line-no">030</span><span id="line-30"></span>
+<span class="source-line-no">031</span><span id="line-31">import java.util.function.BiConsumer;</span>
+<span class="source-line-no">032</span><span id="line-32">import java.util.function.Function;</span>
+<span class="source-line-no">033</span><span id="line-33">import java.util.function.Supplier;</span>
+<span class="source-line-no">034</span><span id="line-34"></span>
+<span class="source-line-no">035</span><span id="line-35">import javax.lang.model.element.Element;</span>
+<span class="source-line-no">036</span><span id="line-36">import javax.lang.model.element.ElementKind;</span>
+<span class="source-line-no">037</span><span id="line-37">import javax.lang.model.element.ExecutableElement;</span>
+<span class="source-line-no">038</span><span id="line-38">import javax.lang.model.element.QualifiedNameable;</span>
+<span class="source-line-no">039</span><span id="line-39"></span>
+<span class="source-line-no">040</span><span id="line-40">import javax.lang.model.type.ArrayType;</span>
+<span class="source-line-no">041</span><span id="line-41">import javax.lang.model.type.DeclaredType;</span>
+<span class="source-line-no">042</span><span id="line-42">import javax.lang.model.type.IntersectionType;</span>
+<span class="source-line-no">043</span><span id="line-43">import javax.lang.model.type.TypeMirror;</span>
+<span class="source-line-no">044</span><span id="line-44">import javax.lang.model.type.TypeVariable;</span>
 <span class="source-line-no">045</span><span id="line-45"></span>
-<span class="source-line-no">046</span><span id="line-46">  private final InterceptionFunction f;</span>
+<span class="source-line-no">046</span><span id="line-46">import org.microbean.bean.Assignment;</span>
 <span class="source-line-no">047</span><span id="line-47"></span>
-<span class="source-line-no">048</span><span id="line-48">  private final Producer&lt;I&gt; producer;</span>
-<span class="source-line-no">049</span><span id="line-49"></span>
-<span class="source-line-no">050</span><span id="line-50">  /**</span>
-<span class="source-line-no">051</span><span id="line-51">   * Creates a new {@link InterceptingProducer}.</span>
-<span class="source-line-no">052</span><span id="line-52">   *</span>
-<span class="source-line-no">053</span><span id="line-53">   * @param interceptorMethods a {@link Collection} of {@link InterceptorMethod}s; must not be {@code null}</span>
-<span class="source-line-no">054</span><span id="line-54">   *</span>
-<span class="source-line-no">055</span><span id="line-55">   * @param producer a subordinate {@link Producer} to which are delegated the {@link #assign(Function)}, {@link</span>
-<span class="source-line-no">056</span><span id="line-56">   * #dependencies()}, {@link #dispose(Object, Request)} and {@link #produce(SequencedSet)} operations; must not be</span>
-<span class="source-line-no">057</span><span id="line-57">   * {@code null}</span>
-<span class="source-line-no">058</span><span id="line-58">   *</span>
-<span class="source-line-no">059</span><span id="line-59">   * @exception NullPointerException if either argument is {@code null}</span>
-<span class="source-line-no">060</span><span id="line-60">   */</span>
-<span class="source-line-no">061</span><span id="line-61">  @SuppressWarnings("unchecked")</span>
-<span class="source-line-no">062</span><span id="line-62">  public InterceptingProducer(final Collection&lt;? extends InterceptorMethod&gt; interceptorMethods,</span>
-<span class="source-line-no">063</span><span id="line-63">                              final Producer&lt;I&gt; producer) {</span>
-<span class="source-line-no">064</span><span id="line-64">    super();</span>
-<span class="source-line-no">065</span><span id="line-65">    this.producer = producer;</span>
-<span class="source-line-no">066</span><span id="line-66">    final SequencedSet&lt;AttributedElement&gt; dependencies = producer.dependencies();</span>
-<span class="source-line-no">067</span><span id="line-67">    this.f = ofConstruction(interceptorMethods, (ignored, argumentsArray) -&gt; {</span>
-<span class="source-line-no">068</span><span id="line-68">        final SequencedSet&lt;Assignment&lt;?&gt;&gt; assignments = new LinkedHashSet&lt;&gt;();</span>
-<span class="source-line-no">069</span><span id="line-69">        int i = 0;</span>
-<span class="source-line-no">070</span><span id="line-70">        for (final AttributedElement dependency : dependencies) {</span>
-<span class="source-line-no">071</span><span id="line-71">          assignments.add(new Assignment&lt;&gt;(dependency, argumentsArray[i++]));</span>
-<span class="source-line-no">072</span><span id="line-72">        }</span>
-<span class="source-line-no">073</span><span id="line-73">        return this.produce(Collections.unmodifiableSequencedSet(assignments));</span>
-<span class="source-line-no">074</span><span id="line-74">      });</span>
-<span class="source-line-no">075</span><span id="line-75">  }</span>
-<span class="source-line-no">076</span><span id="line-76"></span>
-<span class="source-line-no">077</span><span id="line-77">  /**</span>
-<span class="source-line-no">078</span><span id="line-78">   * Calls the {@link #assign(Function) assign(Function)} method on the {@linkplain #InterceptingProducer(Collection,</span>
-<span class="source-line-no">079</span><span id="line-79">   * Producer) &lt;code&gt;Producer&lt;/code&gt; supplied at construction time} with the supplied {@link Request} and returns the</span>
-<span class="source-line-no">080</span><span id="line-80">   * result.</span>
-<span class="source-line-no">081</span><span id="line-81">   *</span>
-<span class="source-line-no">082</span><span id="line-82">   * @param r a {@link Function} that returns a contextual reference for a given {@link AttributedType}; must not be</span>
-<span class="source-line-no">083</span><span id="line-83">   * {@code null}</span>
-<span class="source-line-no">084</span><span id="line-84">   *</span>
-<span class="source-line-no">085</span><span id="line-85">   * @return the result of calling the {@link #assign(Function) assign(Function)} method on the {@linkplain</span>
-<span class="source-line-no">086</span><span id="line-86">   * #InterceptingProducer(Collection, Producer) &lt;code&gt;Producer&lt;/code&gt; supplied at construction time}; never {@code</span>
-<span class="source-line-no">087</span><span id="line-87">   * null}</span>
-<span class="source-line-no">088</span><span id="line-88">   *</span>
-<span class="source-line-no">089</span><span id="line-89">   * @exception NullPointerException if {@code r} is {@code null}</span>
-<span class="source-line-no">090</span><span id="line-90">   *</span>
-<span class="source-line-no">091</span><span id="line-91">   * @see #InterceptingProducer(Collection, Producer)</span>
-<span class="source-line-no">092</span><span id="line-92">   *</span>
-<span class="source-line-no">093</span><span id="line-93">   * @see Producer#assign(Function)</span>
-<span class="source-line-no">094</span><span id="line-94">   */</span>
-<span class="source-line-no">095</span><span id="line-95">  @Override // Producer&lt;I&gt; (Aggregate)</span>
-<span class="source-line-no">096</span><span id="line-96">  public final SequencedSet&lt;? extends Assignment&lt;?&gt;&gt; assign(final Function&lt;? super AttributedType, ?&gt; r) {</span>
-<span class="source-line-no">097</span><span id="line-97">    return this.producer.assign(r);</span>
-<span class="source-line-no">098</span><span id="line-98">  }</span>
-<span class="source-line-no">099</span><span id="line-99"></span>
-<span class="source-line-no">100</span><span id="line-100">  /**</span>
-<span class="source-line-no">101</span><span id="line-101">   * Calls the {@link #dependencies() dependencies()} method on the {@linkplain #InterceptingProducer(Collection,</span>
-<span class="source-line-no">102</span><span id="line-102">   * Producer) &lt;code&gt;Producer&lt;/code&gt; supplied at construction time} and returns the result.</span>
-<span class="source-line-no">103</span><span id="line-103">   *</span>
-<span class="source-line-no">104</span><span id="line-104">   * @return the result of calling the {@link #dependencies() dependencies()} method on the {@linkplain</span>
-<span class="source-line-no">105</span><span id="line-105">   * #InterceptingProducer(Collection, Producer) &lt;code&gt;Producer&lt;/code&gt; supplied at construction time}; never {@code</span>
-<span class="source-line-no">106</span><span id="line-106">   * null}</span>
-<span class="source-line-no">107</span><span id="line-107">   *</span>
-<span class="source-line-no">108</span><span id="line-108">   * @see #InterceptingProducer(Collection, Producer)</span>
-<span class="source-line-no">109</span><span id="line-109">   *</span>
-<span class="source-line-no">110</span><span id="line-110">   * @see org.microbean.bean.Aggregate#dependencies()</span>
-<span class="source-line-no">111</span><span id="line-111">   */</span>
-<span class="source-line-no">112</span><span id="line-112">  @Override // Producer&lt;I&gt; (Aggregate)</span>
-<span class="source-line-no">113</span><span id="line-113">  public final SequencedSet&lt;AttributedElement&gt; dependencies() {</span>
-<span class="source-line-no">114</span><span id="line-114">    return this.producer.dependencies();</span>
-<span class="source-line-no">115</span><span id="line-115">  }</span>
-<span class="source-line-no">116</span><span id="line-116"></span>
-<span class="source-line-no">117</span><span id="line-117">  /**</span>
-<span class="source-line-no">118</span><span id="line-118">   * Calls the {@link #dispose(Object, Request) dispose(Object, Request)} method on the {@linkplain</span>
-<span class="source-line-no">119</span><span id="line-119">   * #InterceptingProducer(Collection, Producer) &lt;code&gt;Producer&lt;/code&gt; supplied at construction time} with the supplied</span>
-<span class="source-line-no">120</span><span id="line-120">   * {@code i} and the supplied {@link Request}.</span>
-<span class="source-line-no">121</span><span id="line-121">   *</span>
-<span class="source-line-no">122</span><span id="line-122">   * @param i a contextual instance produced by this {@link InterceptingProducer}; may be {@code null}</span>
-<span class="source-line-no">123</span><span id="line-123">   *</span>
-<span class="source-line-no">124</span><span id="line-124">   * @param r a {@link Request}; must not be {@code null}</span>
-<span class="source-line-no">125</span><span id="line-125">   *</span>
-<span class="source-line-no">126</span><span id="line-126">   * @exception NullPointerException if {@code r} is {@code null}</span>
-<span class="source-line-no">127</span><span id="line-127">   *</span>
-<span class="source-line-no">128</span><span id="line-128">   * @see #InterceptingProducer(Collection, Producer)</span>
-<span class="source-line-no">129</span><span id="line-129">   *</span>
-<span class="source-line-no">130</span><span id="line-130">   * @see Producer#assign(Function)</span>
-<span class="source-line-no">131</span><span id="line-131">   */</span>
-<span class="source-line-no">132</span><span id="line-132">  @Override // Producer&lt;I&gt;</span>
-<span class="source-line-no">133</span><span id="line-133">  public final void dispose(final I i, final Request&lt;I&gt; r) {</span>
-<span class="source-line-no">134</span><span id="line-134">    this.producer.dispose(i, r);</span>
+<span class="source-line-no">048</span><span id="line-48">import org.microbean.attributes.ArrayValue;</span>
+<span class="source-line-no">049</span><span id="line-49">import org.microbean.attributes.Attributes;</span>
+<span class="source-line-no">050</span><span id="line-50">import org.microbean.attributes.ListValue;</span>
+<span class="source-line-no">051</span><span id="line-51">import org.microbean.attributes.Value;</span>
+<span class="source-line-no">052</span><span id="line-52"></span>
+<span class="source-line-no">053</span><span id="line-53">import org.microbean.bean.AttributedElement;</span>
+<span class="source-line-no">054</span><span id="line-54">import org.microbean.bean.AttributedType;</span>
+<span class="source-line-no">055</span><span id="line-55">import org.microbean.bean.Creation;</span>
+<span class="source-line-no">056</span><span id="line-56">import org.microbean.bean.Destruction;</span>
+<span class="source-line-no">057</span><span id="line-57">import org.microbean.bean.Id;</span>
+<span class="source-line-no">058</span><span id="line-58">import org.microbean.bean.ReferencesSelector;</span>
+<span class="source-line-no">059</span><span id="line-59"></span>
+<span class="source-line-no">060</span><span id="line-60">import org.microbean.construct.Domain;</span>
+<span class="source-line-no">061</span><span id="line-61"></span>
+<span class="source-line-no">062</span><span id="line-62">import org.microbean.interceptor.InterceptionFunction;</span>
+<span class="source-line-no">063</span><span id="line-63">import org.microbean.interceptor.InterceptorMethod;</span>
+<span class="source-line-no">064</span><span id="line-64"></span>
+<span class="source-line-no">065</span><span id="line-65">import static java.util.Collections.synchronizedMap;</span>
+<span class="source-line-no">066</span><span id="line-66">import static java.util.Collections.unmodifiableSequencedSet;</span>
+<span class="source-line-no">067</span><span id="line-67"></span>
+<span class="source-line-no">068</span><span id="line-68">import static java.util.HashMap.newHashMap;</span>
+<span class="source-line-no">069</span><span id="line-69"></span>
+<span class="source-line-no">070</span><span id="line-70">import static java.util.HashSet.newHashSet;</span>
+<span class="source-line-no">071</span><span id="line-71"></span>
+<span class="source-line-no">072</span><span id="line-72">import static org.microbean.assign.Qualifiers.anyQualifier;</span>
+<span class="source-line-no">073</span><span id="line-73"></span>
+<span class="source-line-no">074</span><span id="line-74">import static org.microbean.interceptor.Interceptions.ofConstruction;</span>
+<span class="source-line-no">075</span><span id="line-75">import static org.microbean.interceptor.Interceptions.ofInvocation;</span>
+<span class="source-line-no">076</span><span id="line-76">import static org.microbean.interceptor.Interceptions.ofLifecycleEvent;</span>
+<span class="source-line-no">077</span><span id="line-77"></span>
+<span class="source-line-no">078</span><span id="line-78">/**</span>
+<span class="source-line-no">079</span><span id="line-79"> * A {@link Producer} that applies various kinds of interceptions to a delegate {@link Producer}.</span>
+<span class="source-line-no">080</span><span id="line-80"> *</span>
+<span class="source-line-no">081</span><span id="line-81"> * @param &lt;I&gt; the contextual instance type</span>
+<span class="source-line-no">082</span><span id="line-82"> *</span>
+<span class="source-line-no">083</span><span id="line-83"> * @author &lt;a href="https://about.me/lairdnelson" target="_top"&gt;Laird Nelson&lt;/a&gt;</span>
+<span class="source-line-no">084</span><span id="line-84"> */</span>
+<span class="source-line-no">085</span><span id="line-85">public class InterceptingProducer&lt;I&gt; extends DelegatingProducer&lt;I&gt; {</span>
+<span class="source-line-no">086</span><span id="line-86"></span>
+<span class="source-line-no">087</span><span id="line-87"></span>
+<span class="source-line-no">088</span><span id="line-88">  /*</span>
+<span class="source-line-no">089</span><span id="line-89">   * Static fields.</span>
+<span class="source-line-no">090</span><span id="line-90">   */</span>
+<span class="source-line-no">091</span><span id="line-91"></span>
+<span class="source-line-no">092</span><span id="line-92"></span>
+<span class="source-line-no">093</span><span id="line-93">  private static final List&lt;InterceptorMethodType&gt; TYPES =</span>
+<span class="source-line-no">094</span><span id="line-94">    List.of(AroundConstructInterceptorMethodType.INSTANCE,</span>
+<span class="source-line-no">095</span><span id="line-95">            PostConstructInterceptorMethodType.INSTANCE,</span>
+<span class="source-line-no">096</span><span id="line-96">            AroundInvokeInterceptorMethodType.INSTANCE,</span>
+<span class="source-line-no">097</span><span id="line-97">            PreDestroyInterceptorMethodType.INSTANCE);</span>
+<span class="source-line-no">098</span><span id="line-98"></span>
+<span class="source-line-no">099</span><span id="line-99">  private static final Map&lt;Id, Map&lt;ExecutableElement, Set&lt;Attributes&gt;&gt;&gt; ibs = new ConcurrentHashMap&lt;&gt;();</span>
+<span class="source-line-no">100</span><span id="line-100"></span>
+<span class="source-line-no">101</span><span id="line-101">  private static final Map&lt;Destruction, BiConsumer&lt;? super Object, Destruction&gt;&gt; bcs = synchronizedMap(newHashMap(100));</span>
+<span class="source-line-no">102</span><span id="line-102"></span>
+<span class="source-line-no">103</span><span id="line-103"></span>
+<span class="source-line-no">104</span><span id="line-104">  /*</span>
+<span class="source-line-no">105</span><span id="line-105">   * Instance fields.</span>
+<span class="source-line-no">106</span><span id="line-106">   */</span>
+<span class="source-line-no">107</span><span id="line-107"></span>
+<span class="source-line-no">108</span><span id="line-108"></span>
+<span class="source-line-no">109</span><span id="line-109">  // i.e. the TypeMirror corresponding to org.microbean.producer.Interceptor.class</span>
+<span class="source-line-no">110</span><span id="line-110">  private final TypeMirror interceptorType;</span>
+<span class="source-line-no">111</span><span id="line-111"></span>
+<span class="source-line-no">112</span><span id="line-112">  private final InterceptionProxier proxier;</span>
+<span class="source-line-no">113</span><span id="line-113"></span>
+<span class="source-line-no">114</span><span id="line-114"></span>
+<span class="source-line-no">115</span><span id="line-115">  /*</span>
+<span class="source-line-no">116</span><span id="line-116">   * Constructors.</span>
+<span class="source-line-no">117</span><span id="line-117">   */</span>
+<span class="source-line-no">118</span><span id="line-118"></span>
+<span class="source-line-no">119</span><span id="line-119">  </span>
+<span class="source-line-no">120</span><span id="line-120">  /**</span>
+<span class="source-line-no">121</span><span id="line-121">   * Creates a new {@link InterceptingProducer}.</span>
+<span class="source-line-no">122</span><span id="line-122">   *</span>
+<span class="source-line-no">123</span><span id="line-123">   * @param domain a {@link Domain}; must not be {@code null}</span>
+<span class="source-line-no">124</span><span id="line-124">   *</span>
+<span class="source-line-no">125</span><span id="line-125">   * @param delegate a {@link Producer} to which ultimate production will be delegated; must not be {@code null}</span>
+<span class="source-line-no">126</span><span id="line-126">   *</span>
+<span class="source-line-no">127</span><span id="line-127">   * @param proxier an {@link InterceptionProxier}; must not be {@code null}</span>
+<span class="source-line-no">128</span><span id="line-128">   *</span>
+<span class="source-line-no">129</span><span id="line-129">   * @exception NullPointerException if any argument is {@code null}</span>
+<span class="source-line-no">130</span><span id="line-130">   */</span>
+<span class="source-line-no">131</span><span id="line-131">  public InterceptingProducer(final Domain domain, final Producer&lt;I&gt; delegate, final InterceptionProxier proxier) {</span>
+<span class="source-line-no">132</span><span id="line-132">    super(delegate);</span>
+<span class="source-line-no">133</span><span id="line-133">    this.interceptorType = domain.declaredType(Interceptor.class.getCanonicalName());</span>
+<span class="source-line-no">134</span><span id="line-134">    this.proxier = Objects.requireNonNull(proxier, "proxier");</span>
 <span class="source-line-no">135</span><span id="line-135">  }</span>
 <span class="source-line-no">136</span><span id="line-136"></span>
-<span class="source-line-no">137</span><span id="line-137">  /**</span>
-<span class="source-line-no">138</span><span id="line-138">   * Produces a potentially uninitialized contextual instance and returns it, using the {@linkplain</span>
-<span class="source-line-no">139</span><span id="line-139">   * #InterceptingProducer(Collection, Producer) &lt;code&gt;Collection&lt;/code&gt; of &lt;code&gt;InterceptorMethod&lt;/code&gt;s supplied at</span>
-<span class="source-line-no">140</span><span id="line-140">   * construction time} to intercept the production.</span>
-<span class="source-line-no">141</span><span id="line-141">   *</span>
-<span class="source-line-no">142</span><span id="line-142">   * @param r a {@link Request}; must not be {@code null}</span>
-<span class="source-line-no">143</span><span id="line-143">   *</span>
-<span class="source-line-no">144</span><span id="line-144">   * @return a contextual instance, which may be {@code null}</span>
-<span class="source-line-no">145</span><span id="line-145">   *</span>
-<span class="source-line-no">146</span><span id="line-146">   * @exception NullPointerException if {@code r} is {@code null}</span>
-<span class="source-line-no">147</span><span id="line-147">   *</span>
-<span class="source-line-no">148</span><span id="line-148">   * @see #InterceptingProducer(Collection, Producer)</span>
-<span class="source-line-no">149</span><span id="line-149">   *</span>
-<span class="source-line-no">150</span><span id="line-150">   * @see Producer#produce(Request)</span>
-<span class="source-line-no">151</span><span id="line-151">   */</span>
-<span class="source-line-no">152</span><span id="line-152">  @Override // Producer&lt;I&gt;</span>
-<span class="source-line-no">153</span><span id="line-153">  @SuppressWarnings("unchecked")</span>
-<span class="source-line-no">154</span><span id="line-154">  public final I produce(final Request&lt;?&gt; r) {</span>
-<span class="source-line-no">155</span><span id="line-155">    final Collection&lt;? extends AttributedElement&gt; dependencies = this.dependencies();</span>
-<span class="source-line-no">156</span><span id="line-156">    final Object[] array = new Object[dependencies.size()];</span>
-<span class="source-line-no">157</span><span id="line-157">    int i = 0;</span>
-<span class="source-line-no">158</span><span id="line-158">    for (final AttributedElement d : dependencies) {</span>
-<span class="source-line-no">159</span><span id="line-159">      array[i++] = r.reference(d.attributedType());</span>
-<span class="source-line-no">160</span><span id="line-160">    }</span>
-<span class="source-line-no">161</span><span id="line-161">    return (I)this.f.apply(array);</span>
-<span class="source-line-no">162</span><span id="line-162">  }</span>
-<span class="source-line-no">163</span><span id="line-163"></span>
-<span class="source-line-no">164</span><span id="line-164">  /**</span>
-<span class="source-line-no">165</span><span id="line-165">   * Calls the {@link #produce(SequencedSet) produce(SequencedSet)} method on the {@linkplain</span>
-<span class="source-line-no">166</span><span id="line-166">   * #InterceptingProducer(Collection, Producer) &lt;code&gt;Producer&lt;/code&gt; supplied at construction time} with the supplied</span>
-<span class="source-line-no">167</span><span id="line-167">   * {@code assignments} and returns the result.</span>
-<span class="source-line-no">168</span><span id="line-168">   *</span>
-<span class="source-line-no">169</span><span id="line-169">   * @param assignments a {@link SequencedSet} of {@link Assignment}s; must not be {@code null}</span>
-<span class="source-line-no">170</span><span id="line-170">   *</span>
-<span class="source-line-no">171</span><span id="line-171">   * @exception NullPointerException if {@code assignments} is {@code null}</span>
-<span class="source-line-no">172</span><span id="line-172">   *</span>
-<span class="source-line-no">173</span><span id="line-173">   * @see #InterceptingProducer(Collection, Producer)</span>
-<span class="source-line-no">174</span><span id="line-174">   *</span>
-<span class="source-line-no">175</span><span id="line-175">   * @see Producer#produce(SequencedSet)</span>
-<span class="source-line-no">176</span><span id="line-176">   */</span>
-<span class="source-line-no">177</span><span id="line-177">  @Override // Producer&lt;I&gt;</span>
-<span class="source-line-no">178</span><span id="line-178">  public final I produce(final SequencedSet&lt;? extends Assignment&lt;?&gt;&gt; assignments) {</span>
-<span class="source-line-no">179</span><span id="line-179">    return this.producer.produce(assignments);</span>
-<span class="source-line-no">180</span><span id="line-180">  }</span>
-<span class="source-line-no">181</span><span id="line-181"></span>
-<span class="source-line-no">182</span><span id="line-182">}</span>
+<span class="source-line-no">137</span><span id="line-137"></span>
+<span class="source-line-no">138</span><span id="line-138">  /*</span>
+<span class="source-line-no">139</span><span id="line-139">   * Instance methods.</span>
+<span class="source-line-no">140</span><span id="line-140">   */</span>
+<span class="source-line-no">141</span><span id="line-141"></span>
+<span class="source-line-no">142</span><span id="line-142"></span>
+<span class="source-line-no">143</span><span id="line-143">  @Override // DelegatingProducer&lt;I&gt;</span>
+<span class="source-line-no">144</span><span id="line-144">  public final SequencedSet&lt;AttributedElement&gt; dependencies() {</span>
+<span class="source-line-no">145</span><span id="line-145">    return super.dependencies();</span>
+<span class="source-line-no">146</span><span id="line-146">  }</span>
+<span class="source-line-no">147</span><span id="line-147">  </span>
+<span class="source-line-no">148</span><span id="line-148">  @Override // DelegatingProducer&lt;I&gt;</span>
+<span class="source-line-no">149</span><span id="line-149">  public final void dispose(final I i, final Destruction d) {</span>
+<span class="source-line-no">150</span><span id="line-150">    // Note that the removal here means you can only call dispose() once for a given instance if it has a pre-destroy. I</span>
+<span class="source-line-no">151</span><span id="line-151">    // think that's OK?</span>
+<span class="source-line-no">152</span><span id="line-152">    final BiConsumer&lt;? super Object, Destruction&gt; bc = bcs.remove(d);</span>
+<span class="source-line-no">153</span><span id="line-153">    if (bc != null) {</span>
+<span class="source-line-no">154</span><span id="line-154">      bc.accept(i, d);</span>
+<span class="source-line-no">155</span><span id="line-155">    }</span>
+<span class="source-line-no">156</span><span id="line-156">    super.dispose(i, d);</span>
+<span class="source-line-no">157</span><span id="line-157">  }</span>
+<span class="source-line-no">158</span><span id="line-158"></span>
+<span class="source-line-no">159</span><span id="line-159">  @Override // DelegatingProducer&lt;I&gt;</span>
+<span class="source-line-no">160</span><span id="line-160">  public final I produce(final Creation&lt;I&gt; c) {</span>
+<span class="source-line-no">161</span><span id="line-161">    if (c == null) {</span>
+<span class="source-line-no">162</span><span id="line-162">      return super.produce(c);</span>
+<span class="source-line-no">163</span><span id="line-163">    }</span>
+<span class="source-line-no">164</span><span id="line-164">    final Id id = c.id();</span>
+<span class="source-line-no">165</span><span id="line-165"></span>
+<span class="source-line-no">166</span><span id="line-166">    final Map&lt;ExecutableElement, Set&lt;Attributes&gt;&gt; ibsByMethod =</span>
+<span class="source-line-no">167</span><span id="line-167">      ibs.computeIfAbsent(id, InterceptingProducer::interceptorBindingsByMethod);</span>
+<span class="source-line-no">168</span><span id="line-168">    if (ibsByMethod.isEmpty()) {</span>
+<span class="source-line-no">169</span><span id="line-169">      // No interceptions. Bail out.</span>
+<span class="source-line-no">170</span><span id="line-170">      return super.produce(c);</span>
+<span class="source-line-no">171</span><span id="line-171">    }</span>
+<span class="source-line-no">172</span><span id="line-172"></span>
+<span class="source-line-no">173</span><span id="line-173">    final Map&lt;ExecutableElement, List&lt;InterceptorMethod&gt;&gt; interceptorMethodsByMethod = newHashMap(13);</span>
+<span class="source-line-no">174</span><span id="line-174">    final Map&lt;InterceptorMethodType, Set&lt;ExecutableElement&gt;&gt; methodsByInterceptorType = newHashMap(5);</span>
+<span class="source-line-no">175</span><span id="line-175">    for (final Entry&lt;ExecutableElement, Set&lt;Attributes&gt;&gt; e : ibsByMethod.entrySet()) {</span>
+<span class="source-line-no">176</span><span id="line-176">      for (final Interceptor interceptor : interceptors(e.getValue(), c)) {</span>
+<span class="source-line-no">177</span><span id="line-177">        for (final InterceptorMethodType type : TYPES) {</span>
+<span class="source-line-no">178</span><span id="line-178">          final Collection&lt;? extends InterceptorMethod&gt; interceptorMethods = interceptor.interceptorMethods(type);</span>
+<span class="source-line-no">179</span><span id="line-179">          if (interceptorMethods != null &amp;&amp; !interceptorMethods.isEmpty()) {</span>
+<span class="source-line-no">180</span><span id="line-180">            final ExecutableElement method = e.getKey();</span>
+<span class="source-line-no">181</span><span id="line-181">            methodsByInterceptorType.computeIfAbsent(type, t -&gt; newHashSet(7)).add(method);</span>
+<span class="source-line-no">182</span><span id="line-182">            interceptorMethodsByMethod.computeIfAbsent(method, m -&gt; new ArrayList&lt;&gt;(7)).addAll(interceptorMethods);</span>
+<span class="source-line-no">183</span><span id="line-183">          }</span>
+<span class="source-line-no">184</span><span id="line-184">        }</span>
+<span class="source-line-no">185</span><span id="line-185">      }</span>
+<span class="source-line-no">186</span><span id="line-186">    }</span>
+<span class="source-line-no">187</span><span id="line-187">    if (methodsByInterceptorType.isEmpty()) {</span>
+<span class="source-line-no">188</span><span id="line-188">      // No interceptions. Bail out.</span>
+<span class="source-line-no">189</span><span id="line-189">      return super.produce(c);</span>
+<span class="source-line-no">190</span><span id="line-190">    }</span>
+<span class="source-line-no">191</span><span id="line-191"></span>
+<span class="source-line-no">192</span><span id="line-192">    Supplier&lt;I&gt; s = () -&gt; super.produce(c);</span>
+<span class="source-line-no">193</span><span id="line-193"></span>
+<span class="source-line-no">194</span><span id="line-194">    // Any around-constructs?</span>
+<span class="source-line-no">195</span><span id="line-195">    final Set&lt;ExecutableElement&gt; interceptedConstructors = methodsByInterceptorType.remove(AroundConstructInterceptorMethodType.INSTANCE);</span>
+<span class="source-line-no">196</span><span id="line-196">    if (interceptedConstructors != null &amp;&amp; !interceptedConstructors.isEmpty()) {</span>
+<span class="source-line-no">197</span><span id="line-197">      assert interceptedConstructors.size() == 1 : "interceptedConstructors: " + interceptedConstructors;</span>
+<span class="source-line-no">198</span><span id="line-198">      final List&lt;InterceptorMethod&gt; constructorInterceptorMethods =</span>
+<span class="source-line-no">199</span><span id="line-199">        interceptorMethodsByMethod.remove(interceptedConstructors.iterator().next());</span>
+<span class="source-line-no">200</span><span id="line-200">      s = this.aroundConstructsSupplier(id, constructorInterceptorMethods, c);</span>
+<span class="source-line-no">201</span><span id="line-201">    }</span>
+<span class="source-line-no">202</span><span id="line-202">    if (methodsByInterceptorType.isEmpty()) {</span>
+<span class="source-line-no">203</span><span id="line-203">      // No additional interceptions. Bail out.</span>
+<span class="source-line-no">204</span><span id="line-204">      return s.get();</span>
+<span class="source-line-no">205</span><span id="line-205">    }</span>
+<span class="source-line-no">206</span><span id="line-206"></span>
+<span class="source-line-no">207</span><span id="line-207">    // Any around-invokes?</span>
+<span class="source-line-no">208</span><span id="line-208">    final Set&lt;ExecutableElement&gt; interceptedBusinessMethods = methodsByInterceptorType.remove(AroundInvokeInterceptorMethodType.INSTANCE);</span>
+<span class="source-line-no">209</span><span id="line-209">    if (interceptedBusinessMethods != null &amp;&amp; !interceptedBusinessMethods.isEmpty()) {</span>
+<span class="source-line-no">210</span><span id="line-210">      s = this.aroundInvokesSupplier(s, interceptedBusinessMethods, interceptorMethodsByMethod::get, id);</span>
+<span class="source-line-no">211</span><span id="line-211">    }</span>
+<span class="source-line-no">212</span><span id="line-212">    if (methodsByInterceptorType.isEmpty()) {</span>
+<span class="source-line-no">213</span><span id="line-213">      // No additional interceptions. Bail out.</span>
+<span class="source-line-no">214</span><span id="line-214">      return s.get();</span>
+<span class="source-line-no">215</span><span id="line-215">    }</span>
+<span class="source-line-no">216</span><span id="line-216"></span>
+<span class="source-line-no">217</span><span id="line-217">    // Any post-constructs?</span>
+<span class="source-line-no">218</span><span id="line-218">    final Set&lt;ExecutableElement&gt; postConstructMethods = methodsByInterceptorType.remove(PostConstructInterceptorMethodType.INSTANCE);</span>
+<span class="source-line-no">219</span><span id="line-219">    if (postConstructMethods != null &amp;&amp; !postConstructMethods.isEmpty()) {</span>
+<span class="source-line-no">220</span><span id="line-220">      s = postConstructsSupplier(s, postConstructMethods, interceptorMethodsByMethod::remove);</span>
+<span class="source-line-no">221</span><span id="line-221">    }</span>
+<span class="source-line-no">222</span><span id="line-222">    if (methodsByInterceptorType.isEmpty()) {</span>
+<span class="source-line-no">223</span><span id="line-223">      // No additional interceptions. Bail out.</span>
+<span class="source-line-no">224</span><span id="line-224">      return s.get();</span>
+<span class="source-line-no">225</span><span id="line-225">    }</span>
+<span class="source-line-no">226</span><span id="line-226"></span>
+<span class="source-line-no">227</span><span id="line-227">    // Any pre-destroys?</span>
+<span class="source-line-no">228</span><span id="line-228">    final Set&lt;ExecutableElement&gt; preDestroyMethods = methodsByInterceptorType.remove(PreDestroyInterceptorMethodType.INSTANCE);</span>
+<span class="source-line-no">229</span><span id="line-229">    if (preDestroyMethods != null &amp;&amp; !preDestroyMethods.isEmpty()) {</span>
+<span class="source-line-no">230</span><span id="line-230">      final BiConsumer&lt;? super Object, Destruction&gt; bc =</span>
+<span class="source-line-no">231</span><span id="line-231">        preDestroysBiConsumer(preDestroyMethods, interceptorMethodsByMethod::remove);</span>
+<span class="source-line-no">232</span><span id="line-232">      if (bc != null) {</span>
+<span class="source-line-no">233</span><span id="line-233">        // TODO: yuck</span>
+<span class="source-line-no">234</span><span id="line-234">        bcs.put((Destruction)c, bc);</span>
+<span class="source-line-no">235</span><span id="line-235">      }</span>
+<span class="source-line-no">236</span><span id="line-236">    }</span>
+<span class="source-line-no">237</span><span id="line-237"></span>
+<span class="source-line-no">238</span><span id="line-238">    return s.get();</span>
+<span class="source-line-no">239</span><span id="line-239">  }</span>
+<span class="source-line-no">240</span><span id="line-240"></span>
+<span class="source-line-no">241</span><span id="line-241">  @SuppressWarnings("unchecked")</span>
+<span class="source-line-no">242</span><span id="line-242">  private final Supplier&lt;I&gt; aroundConstructsSupplier(final Id id,</span>
+<span class="source-line-no">243</span><span id="line-243">                                                     final Collection&lt;? extends InterceptorMethod&gt; constructorInterceptorMethods,</span>
+<span class="source-line-no">244</span><span id="line-244">                                                     final ReferencesSelector rs) {</span>
+<span class="source-line-no">245</span><span id="line-245">    final SequencedSet&lt;? extends AttributedElement&gt; pds = this.productionDependencies();</span>
+<span class="source-line-no">246</span><span id="line-246">    final SequencedSet&lt;? extends AttributedElement&gt; ideps = this.initializationDependencies();</span>
+<span class="source-line-no">247</span><span id="line-247">    final InterceptionFunction creationFunction =</span>
+<span class="source-line-no">248</span><span id="line-248">      ofConstruction(constructorInterceptorMethods,</span>
+<span class="source-line-no">249</span><span id="line-249">                     (ignored, argumentsArray) -&gt; {</span>
+<span class="source-line-no">250</span><span id="line-250">                       final SequencedSet&lt;Assignment&lt;?&gt;&gt; assignments = new LinkedHashSet&lt;&gt;();</span>
+<span class="source-line-no">251</span><span id="line-251">                       int i = 0;</span>
+<span class="source-line-no">252</span><span id="line-252">                       for (final AttributedElement pd : pds) {</span>
+<span class="source-line-no">253</span><span id="line-253">                         assignments.add(new Assignment&lt;&gt;(pd, argumentsArray[i++]));</span>
+<span class="source-line-no">254</span><span id="line-254">                       }</span>
+<span class="source-line-no">255</span><span id="line-255">                       for (final AttributedElement idep : ideps) {</span>
+<span class="source-line-no">256</span><span id="line-256">                         assignments.add(new Assignment&lt;&gt;(idep, rs.reference(idep.attributedType())));</span>
+<span class="source-line-no">257</span><span id="line-257">                       }</span>
+<span class="source-line-no">258</span><span id="line-258">                       return this.produce(id, unmodifiableSequencedSet(assignments));</span>
+<span class="source-line-no">259</span><span id="line-259">                     });</span>
+<span class="source-line-no">260</span><span id="line-260">    return () -&gt; {</span>
+<span class="source-line-no">261</span><span id="line-261">      final Object[] arguments = new Object[pds.size()];</span>
+<span class="source-line-no">262</span><span id="line-262">      int i = 0;</span>
+<span class="source-line-no">263</span><span id="line-263">      for (final AttributedElement pd : pds) {</span>
+<span class="source-line-no">264</span><span id="line-264">        arguments[i++] = rs.reference(pd.attributedType());</span>
+<span class="source-line-no">265</span><span id="line-265">      }</span>
+<span class="source-line-no">266</span><span id="line-266">      return (I)creationFunction.apply(arguments);</span>
+<span class="source-line-no">267</span><span id="line-267">    };</span>
+<span class="source-line-no">268</span><span id="line-268">  }</span>
+<span class="source-line-no">269</span><span id="line-269"></span>
+<span class="source-line-no">270</span><span id="line-270">  private final Supplier&lt;I&gt; aroundInvokesSupplier(final Supplier&lt;I&gt; s,</span>
+<span class="source-line-no">271</span><span id="line-271">                                                  final Collection&lt;? extends ExecutableElement&gt; businessMethods,</span>
+<span class="source-line-no">272</span><span id="line-272">                                                  final Function&lt;? super ExecutableElement, List&lt;InterceptorMethod&gt;&gt; f,</span>
+<span class="source-line-no">273</span><span id="line-273">                                                  final Id id) {</span>
+<span class="source-line-no">274</span><span id="line-274">    if (businessMethods.isEmpty()) {</span>
+<span class="source-line-no">275</span><span id="line-275">      return s;</span>
+<span class="source-line-no">276</span><span id="line-276">    }</span>
+<span class="source-line-no">277</span><span id="line-277">    final Map&lt;ExecutableElement, List&lt;InterceptorMethod&gt;&gt; aroundInvokesByMethod = newHashMap(13);</span>
+<span class="source-line-no">278</span><span id="line-278">    for (final ExecutableElement businessMethod : businessMethods) {</span>
+<span class="source-line-no">279</span><span id="line-279">      aroundInvokesByMethod.put(businessMethod, f.apply(businessMethod));</span>
+<span class="source-line-no">280</span><span id="line-280">    }</span>
+<span class="source-line-no">281</span><span id="line-281">    return aroundInvokesByMethod.isEmpty() ? s : () -&gt; this.proxier.interceptionProxy(id, s, aroundInvokesByMethod);</span>
+<span class="source-line-no">282</span><span id="line-282">  }</span>
+<span class="source-line-no">283</span><span id="line-283"></span>
+<span class="source-line-no">284</span><span id="line-284">  private final Iterable&lt;Interceptor&gt; interceptors(final Collection&lt;? extends Attributes&gt; bindingsSet,</span>
+<span class="source-line-no">285</span><span id="line-285">                                                   final ReferencesSelector rs) {</span>
+<span class="source-line-no">286</span><span id="line-286">    if (bindingsSet.isEmpty()) {</span>
+<span class="source-line-no">287</span><span id="line-287">      return List.of();</span>
+<span class="source-line-no">288</span><span id="line-288">    }</span>
+<span class="source-line-no">289</span><span id="line-289">    final List&lt;Attributes&gt; attributes = new ArrayList&lt;&gt;(bindingsSet.size() + 1); // + 1: reserve space for @Any</span>
+<span class="source-line-no">290</span><span id="line-290">    attributes.addAll(bindingsSet);</span>
+<span class="source-line-no">291</span><span id="line-291">    attributes.add(anyQualifier());</span>
+<span class="source-line-no">292</span><span id="line-292">    return rs.references(new AttributedType(this.interceptorType, attributes));</span>
+<span class="source-line-no">293</span><span id="line-293">  }</span>
+<span class="source-line-no">294</span><span id="line-294"></span>
+<span class="source-line-no">295</span><span id="line-295"></span>
+<span class="source-line-no">296</span><span id="line-296">  /*</span>
+<span class="source-line-no">297</span><span id="line-297">   * Static methods.</span>
+<span class="source-line-no">298</span><span id="line-298">   */</span>
+<span class="source-line-no">299</span><span id="line-299"></span>
+<span class="source-line-no">300</span><span id="line-300"></span>
+<span class="source-line-no">301</span><span id="line-301">  private static final List&lt;ExecutableElement&gt; constructorsAndMethods(final TypeMirror t) {</span>
+<span class="source-line-no">302</span><span id="line-302">    return t instanceof DeclaredType dt ? constructorsAndMethods(dt.asElement()) : List.of();</span>
+<span class="source-line-no">303</span><span id="line-303">  }</span>
+<span class="source-line-no">304</span><span id="line-304"></span>
+<span class="source-line-no">305</span><span id="line-305">  private static final List&lt;ExecutableElement&gt; constructorsAndMethods(final Element e) {</span>
+<span class="source-line-no">306</span><span id="line-306">    final List&lt;? extends Element&gt; enclosedElements = e.getEnclosedElements();</span>
+<span class="source-line-no">307</span><span id="line-307">    if (enclosedElements.isEmpty()) {</span>
+<span class="source-line-no">308</span><span id="line-308">      return List.of();</span>
+<span class="source-line-no">309</span><span id="line-309">    }</span>
+<span class="source-line-no">310</span><span id="line-310">    final List&lt;ExecutableElement&gt; ees = new ArrayList&lt;&gt;(enclosedElements.size());</span>
+<span class="source-line-no">311</span><span id="line-311">    for (final Element ee : enclosedElements) {</span>
+<span class="source-line-no">312</span><span id="line-312">      switch (ee.getKind()) {</span>
+<span class="source-line-no">313</span><span id="line-313">      case CONSTRUCTOR, METHOD -&gt; ees.add((ExecutableElement)ee);</span>
+<span class="source-line-no">314</span><span id="line-314">      }</span>
+<span class="source-line-no">315</span><span id="line-315">    }</span>
+<span class="source-line-no">316</span><span id="line-316">    return ees.isEmpty() ? List.of() : Collections.unmodifiableList(ees);</span>
+<span class="source-line-no">317</span><span id="line-317">  }</span>
+<span class="source-line-no">318</span><span id="line-318"></span>
+<span class="source-line-no">319</span><span id="line-319">  private static final Attributes interceptionSpecification(final Collection&lt;? extends Attributes&gt; c) {</span>
+<span class="source-line-no">320</span><span id="line-320">    for (final Attributes a : c) {</span>
+<span class="source-line-no">321</span><span id="line-321">      if (a.name().equals("InterceptionSpecification")) {</span>
+<span class="source-line-no">322</span><span id="line-322">        return a;</span>
+<span class="source-line-no">323</span><span id="line-323">      }</span>
+<span class="source-line-no">324</span><span id="line-324">    }</span>
+<span class="source-line-no">325</span><span id="line-325">    return null;</span>
+<span class="source-line-no">326</span><span id="line-326">  }</span>
+<span class="source-line-no">327</span><span id="line-327"></span>
+<span class="source-line-no">328</span><span id="line-328">  private static final Map&lt;ExecutableElement, Set&lt;Attributes&gt;&gt; interceptorBindingsByMethod(final Id id) {</span>
+<span class="source-line-no">329</span><span id="line-329">    return interceptorBindingsByMethod(interceptionSpecification(id.attributes()), id.types().get(0));</span>
+<span class="source-line-no">330</span><span id="line-330">  }</span>
+<span class="source-line-no">331</span><span id="line-331"></span>
+<span class="source-line-no">332</span><span id="line-332">  private static final Map&lt;ExecutableElement, Set&lt;Attributes&gt;&gt; interceptorBindingsByMethod(final Attributes interceptionSpecification,</span>
+<span class="source-line-no">333</span><span id="line-333">                                                                                           final TypeMirror t) {</span>
+<span class="source-line-no">334</span><span id="line-334">    return interceptorBindingsByMethod(interceptionSpecification, constructorsAndMethods(t));</span>
+<span class="source-line-no">335</span><span id="line-335">  }</span>
+<span class="source-line-no">336</span><span id="line-336"></span>
+<span class="source-line-no">337</span><span id="line-337">  @SuppressWarnings("unchecked")</span>
+<span class="source-line-no">338</span><span id="line-338">  private static final Map&lt;ExecutableElement, Set&lt;Attributes&gt;&gt; interceptorBindingsByMethod(final Attributes interceptionSpecification,</span>
+<span class="source-line-no">339</span><span id="line-339">                                                                                           final Collection&lt;? extends ExecutableElement&gt; ees) {</span>
+<span class="source-line-no">340</span><span id="line-340">    if (interceptionSpecification == null || ees == null || ees.isEmpty() || interceptionSpecification.values().isEmpty()) {</span>
+<span class="source-line-no">341</span><span id="line-341">      return Map.of();</span>
+<span class="source-line-no">342</span><span id="line-342">    }</span>
+<span class="source-line-no">343</span><span id="line-343">    final Map&lt;ExecutableElement, Set&lt;Attributes&gt;&gt; ibsByMethod = newHashMap(13);</span>
+<span class="source-line-no">344</span><span id="line-344">    for (final ExecutableElement ee : ees) {</span>
+<span class="source-line-no">345</span><span id="line-345">      final StringBuilder sb = new StringBuilder();</span>
+<span class="source-line-no">346</span><span id="line-346">      sb.append(ee.getSimpleName().toString());</span>
+<span class="source-line-no">347</span><span id="line-347">      final StringJoiner sj = new StringJoiner(", ", "(", ")");</span>
+<span class="source-line-no">348</span><span id="line-348">      for (final Element p : ee.getParameters()) {</span>
+<span class="source-line-no">349</span><span id="line-349">        sj.add(name(p.asType()));</span>
+<span class="source-line-no">350</span><span id="line-350">      }</span>
+<span class="source-line-no">351</span><span id="line-351">      sb.append(sj.toString());</span>
+<span class="source-line-no">352</span><span id="line-352">      // (sb is now Javadoc-ish: frob(java.lang.String[], java.lang.Object) etc.)</span>
+<span class="source-line-no">353</span><span id="line-353">      switch (interceptionSpecification.values().get(sb.toString())) {</span>
+<span class="source-line-no">354</span><span id="line-354">      case Attributes a -&gt; ibsByMethod.put(ee, Set.of(a));</span>
+<span class="source-line-no">355</span><span id="line-355">      case ArrayValue&lt;?&gt; av -&gt; ibsByMethod.put(ee, Set.copyOf(Arrays.asList(((ArrayValue&lt;Attributes&gt;)av).value())));</span>
+<span class="source-line-no">356</span><span id="line-356">      case ListValue&lt;?&gt; lv -&gt; ibsByMethod.put(ee, Set.copyOf(((ListValue&lt;Attributes&gt;)lv).value()));</span>
+<span class="source-line-no">357</span><span id="line-357">      default -&gt; {}</span>
+<span class="source-line-no">358</span><span id="line-358">      };</span>
+<span class="source-line-no">359</span><span id="line-359">    }</span>
+<span class="source-line-no">360</span><span id="line-360">    return ibsByMethod.isEmpty() ? Map.of() : Collections.unmodifiableMap(ibsByMethod);</span>
+<span class="source-line-no">361</span><span id="line-361">  }</span>
+<span class="source-line-no">362</span><span id="line-362"></span>
+<span class="source-line-no">363</span><span id="line-363">  // Not suitable for general use.</span>
+<span class="source-line-no">364</span><span id="line-364">  private static final String name(final TypeMirror t) {</span>
+<span class="source-line-no">365</span><span id="line-365">    return switch (t.getKind()) {</span>
+<span class="source-line-no">366</span><span id="line-366">    case ARRAY -&gt; name(((ArrayType)t).getComponentType()) + "[]";</span>
+<span class="source-line-no">367</span><span id="line-367">    case BOOLEAN -&gt; "boolean";</span>
+<span class="source-line-no">368</span><span id="line-368">    case BYTE -&gt; "byte";</span>
+<span class="source-line-no">369</span><span id="line-369">    case CHAR -&gt; "char";</span>
+<span class="source-line-no">370</span><span id="line-370">    case DECLARED -&gt; ((QualifiedNameable)((DeclaredType)t).asElement()).getQualifiedName().toString();</span>
+<span class="source-line-no">371</span><span id="line-371">    case DOUBLE -&gt; "double";</span>
+<span class="source-line-no">372</span><span id="line-372">    case FLOAT -&gt; "float";</span>
+<span class="source-line-no">373</span><span id="line-373">    case INT -&gt; "int";</span>
+<span class="source-line-no">374</span><span id="line-374">    case INTERSECTION -&gt; name(((IntersectionType)t).getBounds().get(0));</span>
+<span class="source-line-no">375</span><span id="line-375">    case LONG -&gt; "long";</span>
+<span class="source-line-no">376</span><span id="line-376">    case SHORT -&gt; "short";</span>
+<span class="source-line-no">377</span><span id="line-377">    case TYPEVAR -&gt; name(((TypeVariable)t).getUpperBound());</span>
+<span class="source-line-no">378</span><span id="line-378">    case VOID -&gt; "void";</span>
+<span class="source-line-no">379</span><span id="line-379">    default -&gt; throw new IllegalArgumentException("t: " + t);</span>
+<span class="source-line-no">380</span><span id="line-380">    };</span>
+<span class="source-line-no">381</span><span id="line-381">  }</span>
+<span class="source-line-no">382</span><span id="line-382"></span>
+<span class="source-line-no">383</span><span id="line-383">  private static final &lt;I&gt; Supplier&lt;I&gt; postConstructsSupplier(final Supplier&lt;I&gt; s,</span>
+<span class="source-line-no">384</span><span id="line-384">                                                              final Collection&lt;? extends ExecutableElement&gt; postConstructMethods,</span>
+<span class="source-line-no">385</span><span id="line-385">                                                              final Function&lt;? super ExecutableElement, List&lt;InterceptorMethod&gt;&gt; f) {</span>
+<span class="source-line-no">386</span><span id="line-386">    if (postConstructMethods.isEmpty()) {</span>
+<span class="source-line-no">387</span><span id="line-387">      return s;</span>
+<span class="source-line-no">388</span><span id="line-388">    }</span>
+<span class="source-line-no">389</span><span id="line-389">    final List&lt;InterceptorMethod&gt; interceptorMethods = new ArrayList&lt;&gt;();</span>
+<span class="source-line-no">390</span><span id="line-390">    for (final ExecutableElement pcm : postConstructMethods) {</span>
+<span class="source-line-no">391</span><span id="line-391">      final List&lt;InterceptorMethod&gt; ims = f.apply(pcm);</span>
+<span class="source-line-no">392</span><span id="line-392">      if (ims != null) {</span>
+<span class="source-line-no">393</span><span id="line-393">        interceptorMethods.addAll(ims);</span>
+<span class="source-line-no">394</span><span id="line-394">      }</span>
+<span class="source-line-no">395</span><span id="line-395">    }</span>
+<span class="source-line-no">396</span><span id="line-396">    if (interceptorMethods.isEmpty()) {</span>
+<span class="source-line-no">397</span><span id="line-397">      return s;</span>
+<span class="source-line-no">398</span><span id="line-398">    }</span>
+<span class="source-line-no">399</span><span id="line-399">    final TargetSupplier&lt;I&gt; targetSupplier = new TargetSupplier&lt;&gt;();</span>
+<span class="source-line-no">400</span><span id="line-400">    final Runnable invoker = ofLifecycleEvent(interceptorMethods, targetSupplier, null);</span>
+<span class="source-line-no">401</span><span id="line-401">    return () -&gt; {</span>
+<span class="source-line-no">402</span><span id="line-402">      final I i = s.get();</span>
+<span class="source-line-no">403</span><span id="line-403">      targetSupplier.set(i); // TODO: thread safe?</span>
+<span class="source-line-no">404</span><span id="line-404">      invoker.run();</span>
+<span class="source-line-no">405</span><span id="line-405">      return i;</span>
+<span class="source-line-no">406</span><span id="line-406">    };</span>
+<span class="source-line-no">407</span><span id="line-407">  }</span>
+<span class="source-line-no">408</span><span id="line-408"></span>
+<span class="source-line-no">409</span><span id="line-409">  private static final &lt;I&gt; BiConsumer&lt;I, Destruction&gt; preDestroysBiConsumer(final Collection&lt;? extends ExecutableElement&gt; preDestroyMethods,</span>
+<span class="source-line-no">410</span><span id="line-410">                                                                            final Function&lt;? super ExecutableElement, List&lt;InterceptorMethod&gt;&gt; f) {</span>
+<span class="source-line-no">411</span><span id="line-411">    if (preDestroyMethods.isEmpty()) {</span>
+<span class="source-line-no">412</span><span id="line-412">      return null;</span>
+<span class="source-line-no">413</span><span id="line-413">    }</span>
+<span class="source-line-no">414</span><span id="line-414">    final List&lt;InterceptorMethod&gt; interceptorMethods = new ArrayList&lt;&gt;();</span>
+<span class="source-line-no">415</span><span id="line-415">    for (final ExecutableElement pdm : preDestroyMethods) {</span>
+<span class="source-line-no">416</span><span id="line-416">      final List&lt;InterceptorMethod&gt; ims = f.apply(pdm);</span>
+<span class="source-line-no">417</span><span id="line-417">      if (ims != null) {</span>
+<span class="source-line-no">418</span><span id="line-418">        interceptorMethods.addAll(ims);</span>
+<span class="source-line-no">419</span><span id="line-419">      }</span>
+<span class="source-line-no">420</span><span id="line-420">    }</span>
+<span class="source-line-no">421</span><span id="line-421">    if (interceptorMethods.isEmpty()) {</span>
+<span class="source-line-no">422</span><span id="line-422">      return null;</span>
+<span class="source-line-no">423</span><span id="line-423">    }</span>
+<span class="source-line-no">424</span><span id="line-424">    final TargetSupplier&lt;I&gt; targetSupplier = new TargetSupplier&lt;&gt;();</span>
+<span class="source-line-no">425</span><span id="line-425">    final Runnable invoker = ofLifecycleEvent(interceptorMethods, targetSupplier, null);</span>
+<span class="source-line-no">426</span><span id="line-426">    return (i, d) -&gt; {</span>
+<span class="source-line-no">427</span><span id="line-427">      targetSupplier.set(i); // TODO: thread safe?</span>
+<span class="source-line-no">428</span><span id="line-428">      invoker.run();</span>
+<span class="source-line-no">429</span><span id="line-429">    };</span>
+<span class="source-line-no">430</span><span id="line-430">  }</span>
+<span class="source-line-no">431</span><span id="line-431"></span>
+<span class="source-line-no">432</span><span id="line-432"></span>
+<span class="source-line-no">433</span><span id="line-433">  /*</span>
+<span class="source-line-no">434</span><span id="line-434">   * Inner and nested classes.</span>
+<span class="source-line-no">435</span><span id="line-435">   */</span>
+<span class="source-line-no">436</span><span id="line-436"></span>
+<span class="source-line-no">437</span><span id="line-437"></span>
+<span class="source-line-no">438</span><span id="line-438">  private static final class TargetSupplier&lt;I&gt; implements Supplier&lt;I&gt; {</span>
+<span class="source-line-no">439</span><span id="line-439"></span>
+<span class="source-line-no">440</span><span id="line-440">    private volatile I i;</span>
+<span class="source-line-no">441</span><span id="line-441"></span>
+<span class="source-line-no">442</span><span id="line-442">    private TargetSupplier() {</span>
+<span class="source-line-no">443</span><span id="line-443">      super();</span>
+<span class="source-line-no">444</span><span id="line-444">    }</span>
+<span class="source-line-no">445</span><span id="line-445"></span>
+<span class="source-line-no">446</span><span id="line-446">    @Override // Supplier&lt;I&gt;</span>
+<span class="source-line-no">447</span><span id="line-447">    public final I get() {</span>
+<span class="source-line-no">448</span><span id="line-448">      return this.i; // volatile read</span>
+<span class="source-line-no">449</span><span id="line-449">    }</span>
+<span class="source-line-no">450</span><span id="line-450"></span>
+<span class="source-line-no">451</span><span id="line-451">    private final void set(final I i) {</span>
+<span class="source-line-no">452</span><span id="line-452">      this.i = i; // volatile write</span>
+<span class="source-line-no">453</span><span id="line-453">    }</span>
+<span class="source-line-no">454</span><span id="line-454"></span>
+<span class="source-line-no">455</span><span id="line-455">  }</span>
+<span class="source-line-no">456</span><span id="line-456"></span>
+<span class="source-line-no">457</span><span id="line-457">}</span>
 
 
 
