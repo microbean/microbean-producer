@@ -80,7 +80,7 @@
     <!-- maven-javadoc-plugin properties -->
     <bottom><![CDATA[Copyright &copy; ${project.inceptionYear}&ndash;{currentYear}, <a href="${project.organization.url}" target="_top">${project.organization.name}</a>. All rights reserved.]]></bottom>
     <doctitle>&lt;a href="${project.url}" target="_top"&gt;&lt;span style="font-family:Lobster, cursive;"&gt;µb&lt;/span&gt; ${project.artifactId}&lt;/a&gt; ${project.version}</doctitle>
-    <links>https://microbean.github.io/microbean-bean/apidocs/,https://microbean.github.io/microbean-interceptor/apidocs/</links>
+    <links>https://microbean.github.io/microbean-bean/apidocs/,https://microbean.github.io/microbean-construct/apidocs/,https://microbean.github.io/microbean-interceptor/apidocs/,https://microbean.github.io/microbean-proxy/apidocs/</links>
     <sourcetab>2</sourcetab>
 
     <!-- maven-release-plugin properties -->
@@ -125,7 +125,7 @@
       <dependency>
         <groupId>org.junit</groupId>
         <artifactId>junit-bom</artifactId>
-        <version>5.11.4</version>
+        <version>5.13.0</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -134,14 +134,38 @@
 
       <dependency>
         <groupId>org.microbean</groupId>
+        <artifactId>microbean-assign</artifactId>
+        <version>0.0.5</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.microbean</groupId>
+        <artifactId>microbean-attributes</artifactId>
+        <version>0.0.2</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.microbean</groupId>
         <artifactId>microbean-bean</artifactId>
-        <version>0.0.16</version>
+        <version>0.0.18</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.microbean</groupId>
+        <artifactId>microbean-construct</artifactId>
+        <version>0.0.10</version>
       </dependency>
 
       <dependency>
         <groupId>org.microbean</groupId>
         <artifactId>microbean-interceptor</artifactId>
         <version>0.5.1</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.microbean</groupId>
+        <artifactId>microbean-proxy</artifactId>
+        <version>0.0.2</version>
       </dependency>
 
     </dependencies>
@@ -151,13 +175,37 @@
 
     <dependency>
       <groupId>org.microbean</groupId>
+      <artifactId>microbean-assign</artifactId>
+      <scope>compile</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.microbean</groupId>
+      <artifactId>microbean-attributes</artifactId>
+      <scope>compile</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.microbean</groupId>
       <artifactId>microbean-bean</artifactId>
       <scope>compile</scope>
     </dependency>
 
     <dependency>
       <groupId>org.microbean</groupId>
+      <artifactId>microbean-construct</artifactId>
+      <scope>compile</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.microbean</groupId>
       <artifactId>microbean-interceptor</artifactId>
+      <scope>compile</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.microbean</groupId>
+      <artifactId>microbean-proxy</artifactId>
       <scope>compile</scope>
     </dependency>
 
@@ -174,7 +222,7 @@
       <artifactId>junit-jupiter-engine</artifactId>
       <scope>test</scope>
     </dependency>
-    
+
   </dependencies>
 
   <build>
@@ -302,7 +350,7 @@
         </plugin>
         <plugin>
           <artifactId>maven-clean-plugin</artifactId>
-          <version>3.4.1</version>
+          <version>3.5.0</version>
           <configuration>
             <filesets>
               <fileset>
@@ -417,14 +465,7 @@
         </plugin>
         <plugin>
           <artifactId>maven-surefire-plugin</artifactId>
-          <version>3.5.2</version>
-          <dependencies>
-            <dependency>
-              <groupId>org.apache.maven.surefire</groupId>
-              <artifactId>surefire-junit-platform</artifactId>
-              <version>3.5.2</version>
-            </dependency>
-          </dependencies>
+          <version>3.5.3</version>
         </plugin>
         <plugin>
           <artifactId>maven-toolchains-plugin</artifactId>
@@ -433,7 +474,7 @@
         <plugin>
           <groupId>com.github.spotbugs</groupId>
           <artifactId>spotbugs-maven-plugin</artifactId>
-          <version>4.9.2.0</version>
+          <version>4.9.3.0</version>
         </plugin>
         <plugin>
           <groupId>org.codehaus.mojo</groupId>
@@ -443,7 +484,7 @@
         <plugin>
           <groupId>io.smallrye</groupId>
           <artifactId>jandex-maven-plugin</artifactId>
-          <version>3.2.7</version>
+          <version>3.3.1</version>
         </plugin>
         <plugin>
           <groupId>org.sonatype.plugins</groupId>

@@ -11,15 +11,24 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
+package org.microbean.producer;
 
 /**
- * Provides classes and interfaces implementing <dfn>producers</dfn>, objects which can form the internals of {@link
- * org.microbean.bean.Factory Factory} implementations.
+ * A business method-oriented {@link InterceptorMethodType}.
  *
  * @author <a href="https://about.me/lairdnelson" target="_top">Laird Nelson</a>
- *
- * @see org.microbean.producer.Producer
- *
- * @see org.microbean.producer.InterceptingProducer
  */
-package org.microbean.producer;
+public abstract non-sealed class AbstractMethodInterceptorMethodType extends InterceptorMethodType {
+
+  /**
+   * Creates a new {@link AbstractMethodInterceptorMethodType}.
+   *
+   * @param name a globally unique name; must not be {@code null}
+   *
+   * @exception NullPointerException if {@code name} is {@code null}
+   */
+  protected AbstractMethodInterceptorMethodType(final String name) {
+    super(TargetKind.METHOD, name);
+  }
+  
+}
