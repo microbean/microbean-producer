@@ -13,89 +13,83 @@
  */
 package org.microbean.producer;
 
+import java.util.LinkedHashSet;
 import java.util.SequencedSet;
+
+import java.util.function.Function;
 
 import org.microbean.bean.Aggregate;
 import org.microbean.bean.Assignment;
 import org.microbean.bean.AttributedElement;
-import org.microbean.bean.Request;
+import org.microbean.bean.AttributedType;
+import org.microbean.bean.Creation;
+import org.microbean.bean.Destruction;
+import org.microbean.bean.Id;
+import org.microbean.bean.ReferencesSelector;
+
+import static java.util.Collections.unmodifiableSequencedSet;
 
 /**
- * An interface whose implementations {@linkplain #produce(Request) produce} possibly uninitialized contextual
+ * An interface whose implementations {@linkplain #produce(Creation) produce} and commonly initialize contextual
  * instances.
  *
  * <p>{@link Producer}s are used to implement {@link org.microbean.bean.Factory} instances' {@link
- * org.microbean.bean.Factory#create(Request) create(Request)} and {@link org.microbean.bean.Factory#destroy(Object,
- * Request) destroy(Object, Request)} methods. Values returned from the {@link #produce(Request)} method are often
- * supplied to {@link Initializer}s.</p>
+ * org.microbean.bean.Factory#create(Creation) create(Creation)} and {@link org.microbean.bean.Factory#destroy(Object,
+ * Destruction) destroy(Object, Destruction)} methods.</p>
  *
- * @param <I> the type of contextual instance
+ * <p>A {@link Producer} normally initializes the contextual instances it produces as part of its {@link
+ * #produce(Creation)} method implementation, but is not required to.</p>
+ *
+ * @param <I> the contextual instance type
  *
  * @author <a href="https://about.me/lairdnelson" target="_top">Laird Nelson</a>
  *
- * @see #produce(Request)
+ * @see #produce(Creation)
  *
- * @see org.microbean.bean.Factory#create(Request)
+ * @see #dependencies()
+ *
+ * @see #dispose(Object, Destruction)
+ *
+ * @see org.microbean.bean.Factory#create(Creation)
  */
-// Subordinate to Factory<I> (really to Initializer<I>)
+// Subordinate to Factory<I> (but looking more and more like it every day)
 // Akin to CDI's Producer.
-// Handles instance production and disposal, *including intercepted production*.
+// Handles instance production, interception and disposal, *including intercepted production*.
 //
-// Does NOT handle initialization; see for example
-// https://github.com/search?q=repo%3Aweld%2Fcore+%22.produce%28%29%22+language%3AJava&type=code. Obviously it may
-// acquire dependencies and supply them during production, but the point is it doesn't do field injection or initializer
-// method invocation.
+// Also handles initialization. We may want to revisit this. See for example
+// https://github.com/search?q=repo%3Aweld%2Fcore+%22.produce%28%29%22+language%3AJava&type=code
 //
-// Does NOT handle post-initialization.
-// Does NOT handle business method interception.
-// Does NOT handle pre-disposal.
 // See also: InterceptingProducer
-@FunctionalInterface
 public interface Producer<I> extends Aggregate {
 
   /**
-   * A convenience method that assigns a contextual reference to each of this {@link Aggregate}'s {@link
-   * org.microbean.bean.AttributedElement} instances and returns the resulting {@link SequencedSet} of {@link
-   * Assignment}s.
+   * A convenience method that returns an immutable, determinate {@link SequencedSet} of {@link AttributedElement}s
+   * consisting of this {@link Producer}'s {@linkplain #productionDependencies() production dependencies} followed by
+   * its {@linkplain #initializationDependencies() initialization dependencies}.
    *
-   * <p>Typically there is no need to override this method.</p>
+   * <p>There is normally no need to override the default implementation of this method.</p>
    *
-   * @param r a {@link Request} that retrieves a contextual reference suitable for an {@link
-   * org.microbean.bean.AttributedType}; must not be {@code null}
+   * @return a non-{@code null}, immutable, determinate {@link SequencedSet} of {@link AttributedElement}s consisting of
+   * this {@link Producer}'s {@linkplain #productionDependencies() production dependencies} followed by its {@linkplain
+   * #initializationDependencies() initialization dependencies}
    *
-   * @return an immutable {@link SequencedSet} of {@link Assignment} instances; never {@code null}
+   * @see #productionDependencies()
    *
-   * @exception NullPointerException if {@code r} is {@code null}
-   *
-   * @see #assign(java.util.function.Function)
-   */
-  public default SequencedSet<? extends Assignment<?>> assign(final Request<?> r) {
-    return this.assign(r::reference);
-  }
-
-  /**
-   * Returns an immutable {@link SequencedSet} of {@link AttributedElement} instances <strong>required for instance
-   * creation only</strong>.
-   *
-   * <p>The returned {@link SequencedSet} may be, and often is, empty.</p>
-   *
-   * <p>Overriding this method is normal and expected.</p>
-   *
-   * <p>Any overrides of this method must return determinate values.</p>
-   *
-   * @return an immutable {@link SequencedSet} of {@link AttributedElement} instances; never {@code null}
-   *
-   * @see Aggregate#dependencies()
-   *
-   * @see #assign(java.util.function.Function)
-   *
-   * @see #produce(SequencedSet)
-   *
-   * @see AttributedElement
+   * @see #initializationDependencies()
    */
   @Override // Aggregate
   public default SequencedSet<AttributedElement> dependencies() {
-    return Aggregate.super.dependencies();
+    final SequencedSet<AttributedElement> productionDependencies = this.productionDependencies();
+    final SequencedSet<AttributedElement> initializationDependencies = this.initializationDependencies();
+    if (productionDependencies.isEmpty()) {
+      return initializationDependencies;
+    } else if (initializationDependencies.isEmpty()) {
+      return productionDependencies;
+    }
+    final LinkedHashSet<AttributedElement> d = new LinkedHashSet<>();
+    d.addAll(productionDependencies);
+    d.addAll(initializationDependencies);
+    return unmodifiableSequencedSet(d);
   }
 
   /**
@@ -105,10 +99,10 @@ public interface Producer<I> extends Aggregate {
    * and, if so, calls {@link AutoCloseable#close() close()} on it, throwing any resulting exception as a {@link
    * DisposalException}.</p>
    *
-   * @param i a contextual instance {@linkplain #produce(Request) produced} by this {@link Producer}; may be {@code
+   * @param i a contextual instance {@linkplain #produce(Creation) produced} by this {@link Producer}; may be {@code
    * null}
    *
-   * @param r the {@link Request} that was {@linkplain #produce(Request) present at production time}; must not be {@code
+   * @param r the {@link Creation} that was {@linkplain #produce(Creation) present at production time}; must not be {@code
    * null}
    *
    * @exception NullPointerException if {@code r} is {@code null}
@@ -116,7 +110,7 @@ public interface Producer<I> extends Aggregate {
    * @exception DisposalException if {@code i} is an {@link AutoCloseable} instance, and if its {@link
    * AutoCloseable#close() close()} method throws a checked exception
    */
-  public default void dispose(final I i, final Request<I> r) {
+  public default void dispose(final I i, final Destruction r) {
     if (i instanceof AutoCloseable ac) {
       try {
         ac.close();
@@ -132,37 +126,68 @@ public interface Producer<I> extends Aggregate {
   }
 
   /**
-   * Produces a new contextual instance and returns it by calling the {@link #produce(SequencedSet)} method with the
-   * return value of an invocation of the {@link #assign(Function)} method with a reference to the supplied {@link
-   * Request}'s {@link Request#reference(AttributedType)} method.
+   * Returns an immutable, determinate {@link SequencedSet} of {@link AttributedElement}s representing dependencies
+   * required for initialization.
    *
-   * @param r a {@link Request}; must not be {@code null}
+   * <p>Such dependencies may represent initialization method parameters and/or fields.</p>
+   *
+   * <p>Contrast initialization dependencies with <dfn>production dependencies</dfn>.</p>
+   *
+   * @return a non-{@code null}, immutable, determinate {@link SequencedSet} of {@link AttributedElement}s representing
+   * dependencies required for initialization
+   *
+   * @see #productionDependencies()
+   */
+  public SequencedSet<AttributedElement> initializationDependencies();
+
+  /**
+   * Produces a new contextual instance and returns it by calling the {@link #produce(Id, SequencedSet)} method with the
+   * return value of an invocation of the {@link #assign(Function)} method with a reference to the supplied {@link
+   * Creation}'s {@link ReferencesSelector#reference(AttributedType) reference(AttributedType)} method.
+   *
+   * @param c a {@link Creation}; must not be {@code null}
    *
    * @return a new contextual instance, or {@code null}
    *
-   * @exception NullPointerException if {@code r} is {@code null}
+   * @exception NullPointerException if {@code c} is {@code null}
    *
-   * @see #produce(SequencedSet)
+   * @see #produce(Id, SequencedSet)
    *
-   * @see #assign(Request)
+   * @see #dependencies()
    */
-  public default I produce(final Request<?> r) {
-    return this.produce(this.assign(r));
+  public default I produce(final Creation<I> c) {
+    return this.produce(c.id(), this.assign(c::reference));
   }
 
   /**
-   * Produces a new contextual instance and returns it, possibly (often) making use of the supplied, dependent,
-   * contextual references.
+   * Produces a new contextual instance and returns it, possibly (often) making use of the supplied assignments.
    *
-   * <p>Implementations of this method must not call {@link #produce(Request)} or an infinite loop may result.</p>
+   * <p>Implementations of this method must not call {@link #produce(Creation)} or an infinite loop may result.</p>
    *
-   * @param assignments a {@link SequencedSet} of {@link Assignment}s this {@link Producer} needs <strong>only to create
-   * the contextual instance</strong>; must not be {@code null}
+   * @param id an {@link Id} for which production is occurring; must not be {@code null}
+   *
+   * @param assignments a {@link SequencedSet} of {@link Assignment}s this {@link Producer} needs to complete production
+   * and possibly initialization; must not be {@code null}
    *
    * @return a new contextual instance, or {@code null}
    *
-   * @exception NullPointerException if {@code dependentContextualReferences} is {@code null}
+   * @exception NullPointerException if {@code assignments} is {@code null}
    */
-  public I produce(final SequencedSet<? extends Assignment<?>> assignments);
+  public I produce(final Id id, final SequencedSet<? extends Assignment<?>> assignments);
+
+  /**
+   * Returns an immutable, determinate {@link SequencedSet} of {@link AttributedElement}s representing dependencies
+   * required for production.
+   *
+   * <p>Such dependencies normally represent constructor parameters.</p>
+   *
+   * <p>Contrast production dependencies with <dfn>initialization dependencies</dfn>.</p>
+   *
+   * @return a non-{@code null}, immutable, determinate {@link SequencedSet} of {@link AttributedElement}s representing
+   * dependencies required for production
+   *
+   * @see #initializationDependencies()
+   */
+  public SequencedSet<AttributedElement> productionDependencies();
 
 }

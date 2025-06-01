@@ -11,15 +11,22 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
+package org.microbean.producer;
 
 /**
- * Provides classes and interfaces implementing <dfn>producers</dfn>, objects which can form the internals of {@link
- * org.microbean.bean.Factory Factory} implementations.
+ * A constructor- or production-oriented {@link AbstractLifecycleCallbackInterceptorMethodType}.
  *
  * @author <a href="https://about.me/lairdnelson" target="_top">Laird Nelson</a>
- *
- * @see org.microbean.producer.Producer
- *
- * @see org.microbean.producer.InterceptingProducer
  */
-package org.microbean.producer;
+public final class AroundConstructInterceptorMethodType extends AbstractLifecycleCallbackInterceptorMethodType {
+
+  /**
+   * The sole instance of this class.
+   */
+  public static final AroundConstructInterceptorMethodType INSTANCE = new AroundConstructInterceptorMethodType();
+  
+  private AroundConstructInterceptorMethodType() {
+    super(TargetKind.CONSTRUCTOR, "AroundConstruct");
+  }
+  
+}
