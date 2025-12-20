@@ -18,10 +18,11 @@ import java.util.SequencedSet;
 
 import java.util.function.Function;
 
-import org.microbean.bean.Aggregate;
-import org.microbean.bean.Assignment;
-import org.microbean.bean.AttributedElement;
-import org.microbean.bean.AttributedType;
+import org.microbean.assign.Aggregate;
+import org.microbean.assign.Assignment;
+import org.microbean.assign.AttributedElement;
+import org.microbean.assign.AttributedType;
+
 import org.microbean.bean.Creation;
 import org.microbean.bean.Destruction;
 import org.microbean.bean.Id;
@@ -67,7 +68,7 @@ public interface Producer<I> extends Aggregate {
    * consisting of this {@link Producer}'s {@linkplain #productionDependencies() production dependencies} followed by
    * its {@linkplain #initializationDependencies() initialization dependencies}.
    *
-   * <p>There is normally no need to override the default implementation of this method.</p>
+   * <p><strong>There is normally no need to override the default implementation of this method.</strong></p>
    *
    * @return a non-{@code null}, immutable, determinate {@link SequencedSet} of {@link AttributedElement}s consisting of
    * this {@link Producer}'s {@linkplain #productionDependencies() production dependencies} followed by its {@linkplain
@@ -80,10 +81,11 @@ public interface Producer<I> extends Aggregate {
   @Override // Aggregate
   public default SequencedSet<AttributedElement> dependencies() {
     final SequencedSet<AttributedElement> productionDependencies = this.productionDependencies();
-    final SequencedSet<AttributedElement> initializationDependencies = this.initializationDependencies();
     if (productionDependencies.isEmpty()) {
-      return initializationDependencies;
-    } else if (initializationDependencies.isEmpty()) {
+      return this.initializationDependencies();
+    }
+    final SequencedSet<AttributedElement> initializationDependencies = this.initializationDependencies();
+    if (initializationDependencies.isEmpty()) {
       return productionDependencies;
     }
     final LinkedHashSet<AttributedElement> d = new LinkedHashSet<>();
@@ -127,7 +129,7 @@ public interface Producer<I> extends Aggregate {
 
   /**
    * Returns an immutable, determinate {@link SequencedSet} of {@link AttributedElement}s representing dependencies
-   * required for initialization.
+   * required for <dfn>initialization</dfn>.
    *
    * <p>Such dependencies may represent initialization method parameters and/or fields.</p>
    *
@@ -144,6 +146,8 @@ public interface Producer<I> extends Aggregate {
    * Produces a new contextual instance and returns it by calling the {@link #produce(Id, SequencedSet)} method with the
    * return value of an invocation of the {@link #assign(Function)} method with a reference to the supplied {@link
    * Creation}'s {@link ReferencesSelector#reference(AttributedType) reference(AttributedType)} method.
+   *
+   * <p><strong>There is normally no need to override the default implementation of this method.</strong></p>
    *
    * @param c a {@link Creation}; must not be {@code null}
    *
@@ -177,7 +181,7 @@ public interface Producer<I> extends Aggregate {
 
   /**
    * Returns an immutable, determinate {@link SequencedSet} of {@link AttributedElement}s representing dependencies
-   * required for production.
+   * required for <dfn>production</dfn>.
    *
    * <p>Such dependencies normally represent constructor parameters.</p>
    *
@@ -188,6 +192,9 @@ public interface Producer<I> extends Aggregate {
    *
    * @see #initializationDependencies()
    */
+  // TODO: we could posit that the first AttributedElement in the set could return a TypeElement from its element()
+  // method. If so, then that thing's type ((DeclaredType)asType()) could be used to form an AttributedType to locate
+  // the contextual reference on which to, for example, invoke a method if this Producer represents a producer method
   public SequencedSet<AttributedElement> productionDependencies();
 
 }

@@ -15,8 +15,6 @@ package org.microbean.producer;
 
 import java.util.Collection;
 
-import org.microbean.attributes.Attributes;
-
 import org.microbean.interceptor.InterceptorMethod;
 
 /**

@@ -29,6 +29,8 @@ import org.microbean.interceptor.InterceptorMethod;
 
 import org.microbean.proxy.ProxySpecification;
 
+import static java.util.Collections.unmodifiableMap;
+
 import static java.util.HashMap.newHashMap;
 
 /**
@@ -64,6 +66,10 @@ public interface InterceptionProxier {
    * @author <a href="https://about.me/lairdnelson" target="_top">Laird Nelson</a>
    *
    * @see #interceptorMethods(ExecutableElement)
+   *
+   * @see ProxySpecification
+   *
+   * @see org.microbean.proxy.AbstractProxier#proxy(ProxySpecification, Supplier)
    */
   public static class Specification extends ProxySpecification {
 
@@ -89,7 +95,7 @@ public interface InterceptionProxier {
       for (final Entry<ExecutableElement, List<InterceptorMethod>> e : aroundInvokeInterceptions.entrySet()) {
         m.put(e.getKey(), List.copyOf(e.getValue()));
       }
-      this.aroundInvokeInterceptions = Map.copyOf(m);
+      this.aroundInvokeInterceptions = unmodifiableMap(m);
     }
 
     /**
@@ -107,7 +113,7 @@ public interface InterceptionProxier {
       final List<InterceptorMethod> ims = this.aroundInvokeInterceptions.get(ee);
       return ims == null || ims.isEmpty() ? List.of() : ims;
     }
-    
+
   }
-  
+
 }

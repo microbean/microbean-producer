@@ -20,7 +20,6 @@ import java.lang.reflect.Method;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -49,15 +48,19 @@ import static java.lang.reflect.InvocationHandler.invokeDefault;
 
 import static java.lang.reflect.Proxy.newProxyInstance;
 
+import static java.util.Objects.requireNonNull;
+
 import static org.microbean.interceptor.Interceptions.ofInvocation;
 
 /**
- * An {@link AbstractReflectiveProxier} implementation that uses the proxy features of the Java Development Kit.
+ * An {@link AbstractReflectiveProxier} implementation that uses the {@linkplain java.lang.reflect.Proxy proxy features}
+ * of the Java Development Kit.
  *
  * @author <a href="https://about.me/lairdnelson" target="_top">Laird Nelson</a>
  */
 public final class ReflectiveInterceptionProxier extends AbstractReflectiveProxier<Specification> {
 
+  // TODO: I don't like this. This should somehow come with the (sadly currently reflection agnostic) Specification.
   private static final Lookup lookup = lookup();
 
   /**
@@ -76,24 +79,25 @@ public final class ReflectiveInterceptionProxier extends AbstractReflectiveProxi
                                      final Supplier<? extends R> instanceSupplier) {
     final Map<Method, ExecutableElement> ees = new ConcurrentHashMap<>();
     final Map<Method, InterceptionFunction> fs = new ConcurrentHashMap<>();
-    final R instance = Objects.requireNonNull(instanceSupplier.get(), "instanceSupplier.get()");
+    final R instance = requireNonNull(instanceSupplier.get(), "instanceSupplier.get()");
+    final Supplier<? extends R> s = () -> instance;
     return
       (Proxy<R>)newProxyInstance(this.classLoader(), interfaces, new InvocationHandler() {
           @Override // InvocationHandler
           public final Object invoke(final Object p, final Method m, final Object[] a) throws Throwable {
             return switch (m) {
             case null -> throw new NullPointerException("m");
-            case Method x when equalsMethod(m) -> p == a[0];
-            case Method x when hashCodeMethod(m) -> identityHashCode(p);
+            case Method x when equalsMethod(x) -> p == a[0];
+            case Method x when hashCodeMethod(x) -> identityHashCode(p);
             default -> {
               final List<InterceptorMethod> interceptorMethods =
-                ps.interceptorMethods(ees.computeIfAbsent(m, ReflectiveInterceptionProxier.this::executableElement));
+                ps.interceptorMethods(ees.computeIfAbsent(m, ReflectiveInterceptionProxier.this.domain()::executableElement));
               if (interceptorMethods.isEmpty()) {
                 yield m.isDefault() ? invokeDefault(instance, m, a) : m.invoke(instance, a);
               }
               yield fs.computeIfAbsent(m, m0 -> {
                   try {
-                    return ofInvocation(interceptorMethods, lookup, m0, () -> instance, null);
+                    return ofInvocation(interceptorMethods, lookup, m0, s, null);
                   } catch (final IllegalAccessException e) {
                     throw new IllegalArgumentException("m0: " + m0, e);
                   }

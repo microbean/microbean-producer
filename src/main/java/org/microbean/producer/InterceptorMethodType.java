@@ -15,6 +15,8 @@ package org.microbean.producer;
 
 import java.util.Objects;
 
+import static java.util.Objects.requireNonNull;
+
 /**
  * An abstract descriptor of a type of {@link org.microbean.interceptor.InterceptorMethod InterceptorMethod}.
  *
@@ -37,8 +39,8 @@ public abstract sealed class InterceptorMethodType permits AbstractLifecycleCall
    */
   InterceptorMethodType(final TargetKind kind, final String name) {
     super();
-    this.kind = Objects.requireNonNull(kind, "kind");
-    this.name = Objects.requireNonNull(name, "name");
+    this.kind = requireNonNull(kind, "kind");
+    this.name = requireNonNull(name, "name");
   }
 
   /**

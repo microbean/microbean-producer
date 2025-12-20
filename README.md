@@ -30,7 +30,7 @@ dependency:
   <groupId>org.microbean</groupId>
   <artifactId>microbean-producer</artifactId>
   <!-- Always check https://central.sonatype.com/artifact/org.microbean/microbean-producer for up-to-date available versions. -->
-  <version>0.0.2</version>
+  <version>0.0.3</version>
 </dependency>
 ```
 
