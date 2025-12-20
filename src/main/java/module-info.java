@@ -21,6 +21,8 @@ module org.microbean.producer {
 
   exports org.microbean.producer;
 
+  requires org.microbean.assign;
+  requires transitive org.microbean.attributes;
   requires transitive org.microbean.bean;
   requires org.microbean.construct;
   requires transitive org.microbean.interceptor;

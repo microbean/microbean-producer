@@ -14,7 +14,7 @@
 package org.microbean.producer;
 
 /**
- * A lifecycle event-oriented {@link InterceptorMethodType}.
+ * A lifecycle-event-oriented {@link InterceptorMethodType}.
  *
  * @author <a href="https://about.me/lairdnelson" target="_top">Laird Nelson</a>
  */

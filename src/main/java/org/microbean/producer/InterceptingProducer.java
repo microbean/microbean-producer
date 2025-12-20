@@ -43,18 +43,19 @@ import javax.lang.model.type.IntersectionType;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.type.TypeVariable;
 
-import org.microbean.bean.Assignment;
+import org.microbean.assign.Assignment;
+import org.microbean.assign.AttributedElement;
+import org.microbean.assign.AttributedType;
 
 import org.microbean.attributes.ArrayValue;
 import org.microbean.attributes.Attributes;
 import org.microbean.attributes.ListValue;
 import org.microbean.attributes.Value;
 
-import org.microbean.bean.AttributedElement;
-import org.microbean.bean.AttributedType;
 import org.microbean.bean.Creation;
 import org.microbean.bean.Destruction;
 import org.microbean.bean.Id;
+import org.microbean.bean.Qualifiers;
 import org.microbean.bean.ReferencesSelector;
 
 import org.microbean.construct.Domain;
@@ -69,7 +70,7 @@ import static java.util.HashMap.newHashMap;
 
 import static java.util.HashSet.newHashSet;
 
-import static org.microbean.assign.Qualifiers.anyQualifier;
+import static java.util.Objects.requireNonNull;
 
 import static org.microbean.interceptor.Interceptions.ofConstruction;
 import static org.microbean.interceptor.Interceptions.ofInvocation;
@@ -106,6 +107,8 @@ public class InterceptingProducer<I> extends DelegatingProducer<I> {
    */
 
 
+  private final Qualifiers qualifiers;
+  
   // i.e. the TypeMirror corresponding to org.microbean.producer.Interceptor.class
   private final TypeMirror interceptorType;
 
@@ -116,11 +119,13 @@ public class InterceptingProducer<I> extends DelegatingProducer<I> {
    * Constructors.
    */
 
-  
+
   /**
    * Creates a new {@link InterceptingProducer}.
    *
    * @param domain a {@link Domain}; must not be {@code null}
+   *
+   * @param qualifiers a {@link Qualifiers}; must not be {@code null}
    *
    * @param delegate a {@link Producer} to which ultimate production will be delegated; must not be {@code null}
    *
@@ -128,10 +133,14 @@ public class InterceptingProducer<I> extends DelegatingProducer<I> {
    *
    * @exception NullPointerException if any argument is {@code null}
    */
-  public InterceptingProducer(final Domain domain, final Producer<I> delegate, final InterceptionProxier proxier) {
+  public InterceptingProducer(final Domain domain,
+                              final Qualifiers qualifiers,
+                              final Producer<I> delegate,
+                              final InterceptionProxier proxier) {
     super(delegate);
+    this.qualifiers = requireNonNull(qualifiers, "qualifiers");
     this.interceptorType = domain.declaredType(Interceptor.class.getCanonicalName());
-    this.proxier = Objects.requireNonNull(proxier, "proxier");
+    this.proxier = requireNonNull(proxier, "proxier");
   }
 
 
@@ -144,7 +153,7 @@ public class InterceptingProducer<I> extends DelegatingProducer<I> {
   public final SequencedSet<AttributedElement> dependencies() {
     return super.dependencies();
   }
-  
+
   @Override // DelegatingProducer<I>
   public final void dispose(final I i, final Destruction d) {
     // Note that the removal here means you can only call dispose() once for a given instance if it has a pre-destroy. I
@@ -192,7 +201,8 @@ public class InterceptingProducer<I> extends DelegatingProducer<I> {
     Supplier<I> s = () -> super.produce(c);
 
     // Any around-constructs?
-    final Set<ExecutableElement> interceptedConstructors = methodsByInterceptorType.remove(AroundConstructInterceptorMethodType.INSTANCE);
+    final Set<ExecutableElement> interceptedConstructors =
+      methodsByInterceptorType.remove(AroundConstructInterceptorMethodType.INSTANCE);
     if (interceptedConstructors != null && !interceptedConstructors.isEmpty()) {
       assert interceptedConstructors.size() == 1 : "interceptedConstructors: " + interceptedConstructors;
       final List<InterceptorMethod> constructorInterceptorMethods =
@@ -205,7 +215,8 @@ public class InterceptingProducer<I> extends DelegatingProducer<I> {
     }
 
     // Any around-invokes?
-    final Set<ExecutableElement> interceptedBusinessMethods = methodsByInterceptorType.remove(AroundInvokeInterceptorMethodType.INSTANCE);
+    final Set<ExecutableElement> interceptedBusinessMethods =
+      methodsByInterceptorType.remove(AroundInvokeInterceptorMethodType.INSTANCE);
     if (interceptedBusinessMethods != null && !interceptedBusinessMethods.isEmpty()) {
       s = this.aroundInvokesSupplier(s, interceptedBusinessMethods, interceptorMethodsByMethod::get, id);
     }
@@ -215,7 +226,8 @@ public class InterceptingProducer<I> extends DelegatingProducer<I> {
     }
 
     // Any post-constructs?
-    final Set<ExecutableElement> postConstructMethods = methodsByInterceptorType.remove(PostConstructInterceptorMethodType.INSTANCE);
+    final Set<ExecutableElement> postConstructMethods =
+      methodsByInterceptorType.remove(PostConstructInterceptorMethodType.INSTANCE);
     if (postConstructMethods != null && !postConstructMethods.isEmpty()) {
       s = postConstructsSupplier(s, postConstructMethods, interceptorMethodsByMethod::remove);
     }
@@ -230,7 +242,6 @@ public class InterceptingProducer<I> extends DelegatingProducer<I> {
       final BiConsumer<? super Object, Destruction> bc =
         preDestroysBiConsumer(preDestroyMethods, interceptorMethodsByMethod::remove);
       if (bc != null) {
-        // TODO: yuck
         bcs.put((Destruction)c, bc);
       }
     }
@@ -242,15 +253,15 @@ public class InterceptingProducer<I> extends DelegatingProducer<I> {
   private final Supplier<I> aroundConstructsSupplier(final Id id,
                                                      final Collection<? extends InterceptorMethod> constructorInterceptorMethods,
                                                      final ReferencesSelector rs) {
-    final SequencedSet<? extends AttributedElement> pds = this.productionDependencies();
+    final SequencedSet<? extends AttributedElement> pdeps = this.productionDependencies();
     final SequencedSet<? extends AttributedElement> ideps = this.initializationDependencies();
     final InterceptionFunction creationFunction =
       ofConstruction(constructorInterceptorMethods,
                      (ignored, argumentsArray) -> {
                        final SequencedSet<Assignment<?>> assignments = new LinkedHashSet<>();
                        int i = 0;
-                       for (final AttributedElement pd : pds) {
-                         assignments.add(new Assignment<>(pd, argumentsArray[i++]));
+                       for (final AttributedElement pdep : pdeps) {
+                         assignments.add(new Assignment<>(pdep, argumentsArray[i++]));
                        }
                        for (final AttributedElement idep : ideps) {
                          assignments.add(new Assignment<>(idep, rs.reference(idep.attributedType())));
@@ -258,10 +269,10 @@ public class InterceptingProducer<I> extends DelegatingProducer<I> {
                        return this.produce(id, unmodifiableSequencedSet(assignments));
                      });
     return () -> {
-      final Object[] arguments = new Object[pds.size()];
+      final Object[] arguments = new Object[pdeps.size()];
       int i = 0;
-      for (final AttributedElement pd : pds) {
-        arguments[i++] = rs.reference(pd.attributedType());
+      for (final AttributedElement pdep : pdeps) {
+        arguments[i++] = rs.reference(pdep.attributedType());
       }
       return (I)creationFunction.apply(arguments);
     };
@@ -288,7 +299,7 @@ public class InterceptingProducer<I> extends DelegatingProducer<I> {
     }
     final List<Attributes> attributes = new ArrayList<>(bindingsSet.size() + 1); // + 1: reserve space for @Any
     attributes.addAll(bindingsSet);
-    attributes.add(anyQualifier());
+    attributes.add(this.qualifiers.anyQualifier());
     return rs.references(new AttributedType(this.interceptorType, attributes));
   }
 

@@ -13,17 +13,19 @@
  */
 package org.microbean.producer;
 
-import java.util.Objects;
 import java.util.SequencedSet;
 
 import java.util.function.Function;
 
-import org.microbean.bean.Assignment;
-import org.microbean.bean.AttributedElement;
-import org.microbean.bean.AttributedType;
+import org.microbean.assign.Assignment;
+import org.microbean.assign.AttributedElement;
+import org.microbean.assign.AttributedType;
+
 import org.microbean.bean.Creation;
 import org.microbean.bean.Destruction;
 import org.microbean.bean.Id;
+
+import static java.util.Objects.requireNonNull;
 
 class DelegatingProducer<I> implements Producer<I> {
 
@@ -31,42 +33,42 @@ class DelegatingProducer<I> implements Producer<I> {
 
   DelegatingProducer(final Producer<I> delegate) {
     super();
-    this.delegate = Objects.requireNonNull(delegate, "delegate");
+    this.delegate = requireNonNull(delegate, "delegate");
   }
 
-  @Override
+  @Override // Producer<I>
   public SequencedSet<? extends Assignment<?>> assign(final Function<? super AttributedType, ?> f) {
     return this.delegate.assign(f);
   }
 
-  @Override
+  @Override // Producer<I>
   public SequencedSet<AttributedElement> dependencies() {
     return this.delegate.dependencies();
   }
 
-  @Override
+  @Override // Producer<I>
   public void dispose(final I i, final Destruction d) {
     this.delegate.dispose(i, d);
   }
 
-  @Override
+  @Override // Producer<I>
   public SequencedSet<AttributedElement> initializationDependencies() {
     return this.delegate.initializationDependencies();
   }
-  
-  @Override
+
+  @Override // Producer<I>
   public I produce(final Creation<I> c) {
     return this.delegate.produce(c);
   }
 
-  @Override
+  @Override // Producer<I>
   public I produce(final Id id, final SequencedSet<? extends Assignment<?>> assignments) {
     return this.delegate.produce(id, assignments);
   }
 
-  @Override
+  @Override // Producer<I>
   public SequencedSet<AttributedElement> productionDependencies() {
     return this.delegate.productionDependencies();
   }
-  
+
 }

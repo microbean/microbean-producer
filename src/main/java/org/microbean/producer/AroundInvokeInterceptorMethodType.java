@@ -14,7 +14,7 @@
 package org.microbean.producer;
 
 /**
- * A business method-oriented {@link AbstractMethodInterceptorMethodType}.
+ * A business-method-oriented {@link AbstractMethodInterceptorMethodType}.
  *
  * @author <a href="https://about.me/lairdnelson" target="_top">Laird Nelson</a>
  */
