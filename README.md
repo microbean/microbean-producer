@@ -1,6 +1,8 @@
 # microBean™ Producer
 
-[![Maven Central](https://img.shields.io/maven-central/v/org.microbean/microbean-producer.svg?label=Maven%20Central)](https://search.maven.org/artifact/org.microbean/microbean-producer)
+[![Maven Central](https://img.shields.io/maven-central/v/org.microbean/microbean-producer.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/org.microbean/microbean-producer)
+
+![0% AI](https://img.shields.io/badge/%F0%9F%A4%96_AI-0%25_%F0%9F%8C%BC-brightgreen)
 
 The microBean™ Producer project provides classes and interfaces assisting with implementing
 [`Factory`](https://microbean.github.io/microbean-bean/apidocs/org.microbean.bean/org/microbean/bean/Factory.html)
@@ -30,7 +32,7 @@ dependency:
   <groupId>org.microbean</groupId>
   <artifactId>microbean-producer</artifactId>
   <!-- Always check https://central.sonatype.com/artifact/org.microbean/microbean-producer for up-to-date available versions. -->
-  <version>0.0.3</version>
+  <version>0.0.4</version>
 </dependency>
 ```
 

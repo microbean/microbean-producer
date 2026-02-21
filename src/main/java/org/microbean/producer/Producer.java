@@ -1,6 +1,6 @@
 /* -*- mode: Java; c-basic-offset: 2; indent-tabs-mode: nil; coding: utf-8-unix -*-
  *
- * Copyright © 2025 microBean™.
+ * Copyright © 2025–2026 microBean™.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -18,10 +18,11 @@ import java.util.SequencedSet;
 
 import java.util.function.Function;
 
+import javax.lang.model.element.Element;
+
 import org.microbean.assign.Aggregate;
+import org.microbean.assign.Annotated;
 import org.microbean.assign.Assignment;
-import org.microbean.assign.AttributedElement;
-import org.microbean.assign.AttributedType;
 
 import org.microbean.bean.Creation;
 import org.microbean.bean.Destruction;
@@ -64,13 +65,13 @@ import static java.util.Collections.unmodifiableSequencedSet;
 public interface Producer<I> extends Aggregate {
 
   /**
-   * A convenience method that returns an immutable, determinate {@link SequencedSet} of {@link AttributedElement}s
+   * A convenience method that returns an immutable, determinate {@link SequencedSet} of {@link Element}s
    * consisting of this {@link Producer}'s {@linkplain #productionDependencies() production dependencies} followed by
    * its {@linkplain #initializationDependencies() initialization dependencies}.
    *
    * <p><strong>There is normally no need to override the default implementation of this method.</strong></p>
    *
-   * @return a non-{@code null}, immutable, determinate {@link SequencedSet} of {@link AttributedElement}s consisting of
+   * @return a non-{@code null}, immutable, determinate {@link SequencedSet} of {@link Element}s consisting of
    * this {@link Producer}'s {@linkplain #productionDependencies() production dependencies} followed by its {@linkplain
    * #initializationDependencies() initialization dependencies}
    *
@@ -79,16 +80,16 @@ public interface Producer<I> extends Aggregate {
    * @see #initializationDependencies()
    */
   @Override // Aggregate
-  public default SequencedSet<AttributedElement> dependencies() {
-    final SequencedSet<AttributedElement> productionDependencies = this.productionDependencies();
+  public default SequencedSet<? extends Annotated<? extends Element>> dependencies() {
+    final SequencedSet<? extends Annotated<? extends Element>> productionDependencies = this.productionDependencies();
     if (productionDependencies.isEmpty()) {
       return this.initializationDependencies();
     }
-    final SequencedSet<AttributedElement> initializationDependencies = this.initializationDependencies();
+    final SequencedSet<? extends Annotated<? extends Element>> initializationDependencies = this.initializationDependencies();
     if (initializationDependencies.isEmpty()) {
       return productionDependencies;
     }
-    final LinkedHashSet<AttributedElement> d = new LinkedHashSet<>();
+    final LinkedHashSet<Annotated<? extends Element>> d = new LinkedHashSet<>();
     d.addAll(productionDependencies);
     d.addAll(initializationDependencies);
     return unmodifiableSequencedSet(d);
@@ -128,24 +129,24 @@ public interface Producer<I> extends Aggregate {
   }
 
   /**
-   * Returns an immutable, determinate {@link SequencedSet} of {@link AttributedElement}s representing dependencies
+   * Returns an immutable, determinate {@link SequencedSet} of {@link Element}s representing dependencies
    * required for <dfn>initialization</dfn>.
    *
    * <p>Such dependencies may represent initialization method parameters and/or fields.</p>
    *
    * <p>Contrast initialization dependencies with <dfn>production dependencies</dfn>.</p>
    *
-   * @return a non-{@code null}, immutable, determinate {@link SequencedSet} of {@link AttributedElement}s representing
+   * @return a non-{@code null}, immutable, determinate {@link SequencedSet} of {@link Element}s representing
    * dependencies required for initialization
    *
    * @see #productionDependencies()
    */
-  public SequencedSet<AttributedElement> initializationDependencies();
+  public SequencedSet<? extends Annotated<? extends Element>> initializationDependencies();
 
   /**
    * Produces a new contextual instance and returns it by calling the {@link #produce(Id, SequencedSet)} method with the
    * return value of an invocation of the {@link #assign(Function)} method with a reference to the supplied {@link
-   * Creation}'s {@link ReferencesSelector#reference(AttributedType) reference(AttributedType)} method.
+   * Creation}'s {@link ReferencesSelector#reference(TypeMirror) reference(TypeMirror)} method.
    *
    * <p><strong>There is normally no need to override the default implementation of this method.</strong></p>
    *
@@ -180,21 +181,21 @@ public interface Producer<I> extends Aggregate {
   public I produce(final Id id, final SequencedSet<? extends Assignment<?>> assignments);
 
   /**
-   * Returns an immutable, determinate {@link SequencedSet} of {@link AttributedElement}s representing dependencies
-   * required for <dfn>production</dfn>.
+   * Returns an immutable, determinate {@link SequencedSet} of {@link Element}s representing dependencies required for
+   * <dfn>production</dfn>.
    *
    * <p>Such dependencies normally represent constructor parameters.</p>
    *
    * <p>Contrast production dependencies with <dfn>initialization dependencies</dfn>.</p>
    *
-   * @return a non-{@code null}, immutable, determinate {@link SequencedSet} of {@link AttributedElement}s representing
+   * @return a non-{@code null}, immutable, determinate {@link SequencedSet} of {@link Element}s representing
    * dependencies required for production
    *
    * @see #initializationDependencies()
    */
-  // TODO: we could posit that the first AttributedElement in the set could return a TypeElement from its element()
-  // method. If so, then that thing's type ((DeclaredType)asType()) could be used to form an AttributedType to locate
+  // TODO: we could posit that the first Element in the set could return a TypeElement from its element()
+  // method. If so, then that thing's type ((DeclaredType)asType()) could be used to form an TypeMirror to locate
   // the contextual reference on which to, for example, invoke a method if this Producer represents a producer method
-  public SequencedSet<AttributedElement> productionDependencies();
+  public SequencedSet<? extends Annotated<? extends Element>> productionDependencies();
 
 }

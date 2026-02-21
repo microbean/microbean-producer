@@ -1,6 +1,6 @@
 /* -*- mode: Java; c-basic-offset: 2; indent-tabs-mode: nil; coding: utf-8-unix -*-
  *
- * Copyright © 2025 microBean™.
+ * Copyright © 2025–2026 microBean™.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -45,7 +45,7 @@ public interface Interceptor extends AutoCloseable {
    *
    * @exception NullPointerException if {@code type} is {@code null}
    */
-  // "Give me the @AroundInvoke interceptor methods that are bound to the interceptor binding set that I am attributed
+  // "Give me the @AroundInvoke interceptor methods that are bound to the interceptor binding set that I am annotated
   // with"
   //
   // Interceptor bindings must be at the class level and will therefore apply to all interceptor methods.

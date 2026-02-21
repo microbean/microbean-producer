@@ -1,6 +1,6 @@
 /* -*- mode: Java; c-basic-offset: 2; indent-tabs-mode: nil; coding: utf-8-unix -*-
  *
- * Copyright © 2023–2025 microBean™.
+ * Copyright © 2023–2026 microBean™.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -18,140 +18,272 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
-import org.microbean.attributes.Attributes;
-import org.microbean.attributes.StringValue;
+import java.util.function.Predicate;
+
+import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.QualifiedNameable;
+import javax.lang.model.element.TypeElement;
+
+import org.microbean.construct.Domain;
+
+import org.microbean.construct.element.SyntheticAnnotationMirror;
+import org.microbean.construct.element.SyntheticAnnotationTypeElement;
 
 import static java.util.Collections.unmodifiableList;
 
+import static java.util.Objects.requireNonNull;
+
+import static javax.lang.model.element.ElementKind.ANNOTATION_TYPE;
+
+import static org.microbean.construct.element.AnnotationMirrors.sameAnnotation;
+import static org.microbean.construct.element.AnnotationMirrors.streamBreadthFirst;
+
 /**
- * A utility class providing methods that work with interceptor bindings.
+ * A utility class providing methods that work with <dfn>interceptor bindings</dfn>.
  *
  * @author <a href="https://about.me/lairdnelson" target="_top">Laird Nelson</a>
  */
-// TODO: Now that interceptors have been effectively refactored out into microbean-producer, this might be able to move
-// there, or some other microbean-producer-dependent project.
-public final class InterceptorBindings {
+public class InterceptorBindings {
 
-  private static final Attributes INTERCEPTOR_BINDING = Attributes.of("InterceptorBinding");
+  private final Predicate<? super ExecutableElement> annotationElementInclusionPredicate;
 
-  private static final List<Attributes> INTERCEPTOR_BINDING_LIST = List.of(INTERCEPTOR_BINDING);
+  private final Domain domain;
 
-  private static final Attributes ANY_INTERCEPTOR_BINDING = Attributes.of("Any", INTERCEPTOR_BINDING_LIST);
+  private final AnnotationMirror metaInterceptorBinding;
 
-  private InterceptorBindings() {
-    super();
-  }
+  private final List<AnnotationMirror> metaInterceptorBindings;
 
+  private final AnnotationMirror anyInterceptorBinding;
+
+  private final List<AnnotationMirror> anyInterceptorBindings;
+  
   /**
-   * Returns a {@link Attributes} representing the <dfn>any</dfn> interceptor binding.
+   * Creates a new {@link InterceptorBindings}.
    *
-   * @return a {@link Attributes} representing the <dfn>any</dfn> interceptor binding; never {@code null}
+   * @param domain a {@link Domain}; must not be {@code null}
+   *
+   * @exception NullPointerException if {@code domain} is {@code null}
+   *
+   * @see #InterceptorBindings(Domain, AnnotationMirror, AnnotationMirror, Predicate)
    */
-  public static final Attributes anyInterceptorBinding() {
-    return ANY_INTERCEPTOR_BINDING;
+  public InterceptorBindings(final Domain domain) {
+    this(domain, null, null, null);
   }
 
   /**
-   * Returns {@code true} if and only if the supplied {@link Attributes} represents the <dfn>any</dfn>
-   * interceptor binding.
+   * Creates a new {@link InterceptorBindings}.
    *
-   * @param a a {@link Attributes}; may be {@code null} in which case {@code false} will be returned
+   * @param domain a {@link Domain}; must not be {@code null}
    *
-   * @return {@code true} if and only if the supplied {@link Attributes} represents the <dfn>any</dfn>
-   * interceptor binding
+   * @param metaInterceptorBinding an {@link AnnotationMirror} to serve as the {@linkplain #metaInterceptorBinding()
+   * meta-interceptor binding}; may (commonly) be {@code null} in which case a synthetic meta-interceptor binding will
+   * be used instead
+   *
+   * @param anyInterceptorBinding an {@link AnnotationMirror} indicating that any interceptor binding should match; may
+   * be {@code null}
+   *
+   * @param annotationElementInclusionPredicate a {@link Predicate} that returns {@code true} if a given {@link
+   * ExecutableElement}, representing an annotation element, is to be included in any comparison operation; may be
+   * {@code null} in which case it is as if {@code ()-> true} were supplied instead
+   *
+   * @exception NullPointerException if {@code domain} is {@code null}
+   */
+  public InterceptorBindings(final Domain domain,
+                             final AnnotationMirror metaInterceptorBinding,
+                             final AnnotationMirror anyInterceptorBinding,
+                             final Predicate<? super ExecutableElement> annotationElementInclusionPredicate) {
+    super();
+    if (metaInterceptorBinding == null || anyInterceptorBinding == null) {
+      final List<? extends AnnotationMirror> as = domain.typeElement("java.lang.annotation.Documented").getAnnotationMirrors();
+      assert as.size() == 3; // @Documented, @Retention, @Target, in that order, all annotated in turn with each other
+      final AnnotationMirror documentedAnnotation = as.get(0);
+      final AnnotationMirror retentionAnnotation = as.get(1);
+      final AnnotationMirror targetAnnotation = as.get(2);
+      this.metaInterceptorBinding =
+        metaInterceptorBinding == null ?
+        new SyntheticAnnotationMirror(new SyntheticAnnotationTypeElement(List.of(documentedAnnotation,
+                                                                                 retentionAnnotation, // happens fortuitously to be RUNTIME
+                                                                                 targetAnnotation), // happens fortuitously to be ANNOTATION_TYPE
+                                                                         "InterceptorBinding")) :
+        metaInterceptorBinding;
+      this.anyInterceptorBinding =
+        anyInterceptorBinding == null ?
+        // TODO: meh, documented, retention, target, etc.
+        new SyntheticAnnotationMirror(new SyntheticAnnotationTypeElement(List.of(this.metaInterceptorBinding), "Any")) :
+        anyInterceptorBinding;
+    } else {
+      this.metaInterceptorBinding = metaInterceptorBinding;
+      this.anyInterceptorBinding = anyInterceptorBinding;
+    }
+    this.domain = domain; // may not be needed
+    this.annotationElementInclusionPredicate = annotationElementInclusionPredicate == null ? InterceptorBindings::returnTrue : annotationElementInclusionPredicate;
+    this.metaInterceptorBindings = List.of(this.metaInterceptorBinding);
+    this.anyInterceptorBindings = List.of(this.anyInterceptorBinding);
+  }
+
+  /**
+   * Returns a non-{@code null}, determinate {@link AnnotationMirror} representing the <dfn>any interceptor
+   * binding</dfn>.
+   *
+   * @return a non-{@code null}, determinate {@link AnnotationMirror} representing the <dfn>any interceptor
+   * binding</dfn>
+   */
+  public final AnnotationMirror anyInterceptorBinding() {
+    return this.anyInterceptorBinding;
+  }
+
+  /**
+   * Returns {@code true} if and only if the supplied {@link AnnotationMirror} is {@linkplain
+   * org.microbean.assign.Qualifiers#sameAnnotation(AnnotationMirror, AnnotationMirror) the same} as the {@linkplain
+   * #anyInterceptorBinding() <dfn>any interceptor binding</dfn>}.
+   *
+   * @param a a non-{@code null} {@link AnnotationMirror}
+   *
+   * @return {@code true} if and only if the supplied {@link AnnotationMirror} is {@linkplain
+   * org.microbean.assign.Qualifiers#sameAnnotation(AnnotationMirror, AnnotationMirror) the same} as the {@linkplain
+   * #anyInterceptorBinding() <dfn>any interceptor binding</dfn>}
+   *
+   * @exception NullPointerException if {@code a} is {@code null}
    *
    * @see #anyInterceptorBinding()
+   *
+   * @see org.microbean.construct.element.AnnotationMirrors#sameAnnotation(AnnotationMirror, AnnotationMirror,
+   * Predicate)
    */
-  public static final boolean anyInterceptorBinding(final Attributes a) {
-    return ANY_INTERCEPTOR_BINDING.equals(a) && interceptorBinding(a);
+  public final boolean anyInterceptorBinding(final AnnotationMirror a) {
+    return sameAnnotation(this.anyInterceptorBinding, a, this.annotationElementInclusionPredicate);
   }
 
   /**
-   * Returns a {@link Attributes} representing the <dfn>interceptor binding</dfn> (meta-) interceptor binding.
+   * Returns a non-{@code null}, determinate, immutable {@link List} housing only the {@linkplain
+   * #anyInterceptorBinding() <dfn>any interceptor binding</dfn>}.
    *
-   * @return a {@link Attributes} representing the <dfn>interceptor binding</dfn> (meta-) interceptor binding;
-   * never {@code null}
+   * @return a non-{@code null}, determinate, immutable {@link List} housing only the {@linkplain
+   * #anyInterceptorBinding() <dfn>any interceptor binding</dfn>}
    */
-  public static final Attributes interceptorBinding() {
-    return INTERCEPTOR_BINDING;
+  public final List<AnnotationMirror> anyInterceptorBindings() {
+    return this.anyInterceptorBindings;
+  }
+  
+  /**
+   * Returns a non-{@code null}, determinate {@link AnnotationMirror} representing the (meta-) interceptor binding.
+   *
+   * @return a non-{@code null}, determinate {@link AnnotationMirror} representing the (meta-) interceptor binding
+   */
+  public AnnotationMirror metaInterceptorBinding() {
+    return this.metaInterceptorBinding;
   }
 
   /**
-   * Returns {@code true} if and only if the supplied {@link Attributes} is itself a {@link Attributes} that can be used
-   * to designate other {@link Attributes} instances as interceptor bindings, or a {@link Attributes} so designated.
+   * Returns {@code true} if and only if the supplied {@link AnnotationMirror} has an {@linkplain
+   * AnnotationMirror#getAnnotationType() annotation type} declared by a {@link TypeElement} that is {@linkplain
+   * javax.lang.model.AnnotatedConstruct#getAnnotationMirrors() annotated with} at least one annotation {@linkplain
+   * #metaInterceptorBinding(AnnotationMirror) deemed to be the meta-interceptor binding}.
    *
-   * @param a a {@link Attributes}; may be {@code null} in which case {@code false} will be returned
+   * @param a a non-{@code null} {@link AnnotationMirror}
    *
-   * @return {@code true} if and only if the supplied {@link Attributes} is itself a {@link Attributes}
-   * that can be used to designate other {@link Attributes} instances as interceptor bindings, or a {@link
-   * Attributes} so designated
+   * @return {@code true} if and only if the supplied {@link AnnotationMirror} has an {@linkplain
+   * AnnotationMirror#getAnnotationType() annotation type} declared by a {@link TypeElement} that is {@linkplain
+   * javax.lang.model.AnnotatedConstruct#getAnnotationMirrors() annotated with} at least one annotation {@linkplain
+   * #metaInterceptorBinding(AnnotationMirror) deemed to be the meta-interceptor binding}
    *
-   * @see #interceptorBinding()
+   * @exception NullPointerException if {@code a} is {@code null}
    */
-  public static final boolean interceptorBinding(final Attributes a) {
-    return a != null && interceptorBinding(a.attributes(a.name()));
+  public final boolean metaInterceptorBinding(final AnnotationMirror a) {
+    return sameAnnotation(this.metaInterceptorBinding(), a, this.annotationElementInclusionPredicate);
   }
 
-  private static final boolean interceptorBinding(final Iterable<? extends Attributes> mds) {
-    for (final Attributes md : mds) {
-      if (md.equals(INTERCEPTOR_BINDING) && md.attributes().isEmpty() || interceptorBinding(md)) {
-        return true;
+  /**
+   * Returns a non-{@code null}, determinate, immutable {@link List} whose sole element is the {@linkplain
+   * #metaInterceptorBinding() meta-interceptor binding} annotation.
+   *
+   * @return a non-{@code null}, determinate, immutable {@link List} whose sole element is the {@linkplain
+   * #metaInterceptorBinding() meta-interceptor binding} annotation
+   */
+  public final List<AnnotationMirror> metaInterceptorBindings() {
+    return this.metaInterceptorBindings;
+  }
+
+  /**
+   * Returns {@code true} if and only if the supplied {@link AnnotationMirror} has an {@linkplain
+   * AnnotationMirror#getAnnotationType() annotation type} declared by a {@link TypeElement} that is {@linkplain
+   * javax.lang.model.AnnotatedConstruct#getAnnotationMirrors() annotated with} at least one annotation {@linkplain
+   * #metaInterceptorBinding(AnnotationMirror) deemed to be the meta-interceptor binding}.
+   *
+   * @param a a non-{@code null} {@link AnnotationMirror}
+   *
+   * @return {@code true} if and only if the supplied {@link AnnotationMirror} has an {@linkplain
+   * AnnotationMirror#getAnnotationType() annotation type} declared by a {@link TypeElement} that is {@linkplain
+   * javax.lang.model.AnnotatedConstruct#getAnnotationMirrors() annotated with} at least one annotation {@linkplain
+   * #metaInterceptorBinding(AnnotationMirror) deemed to be the meta-interceptor binding}
+   *
+   * @exception NullPointerException if {@code a} is {@code null}
+   */
+  public final boolean interceptorBinding(final AnnotationMirror a) {
+    if (!this.metaInterceptorBinding(a)) {
+      final Element annotationInterface = a.getAnnotationType().asElement();
+      if (annotationInterface.getKind() == ANNOTATION_TYPE) {
+        for (final AnnotationMirror ma : annotationInterface.getAnnotationMirrors()) {
+          if (this.metaInterceptorBinding(ma)) {
+            return true;
+          }
+        }
       }
     }
     return false;
   }
 
   /**
-   * Given a {@link Collection} of {@link Attributes}s, returns an immutable {@link List} consisting of those
-   * {@link Attributes} instances that are {@linkplain #interceptorBinding() deemed to be interceptor bindings}.
+   * Returns a non-{@code null}, determinate, immutable {@link List} of {@link AnnotationMirror} instances drawn from
+   * the supplied {@link Collection} that are {@linkplain #interceptorBinding(AnnotationMirror) deemed to be
+   * interceptor bindings}.
    *
-   * @param c a {@link Collection}; must not be {@code null}
+   * <p>In this implementation, cycles are avoided and comparisons are accomplished with the {@link
+   * org.microbean.construct.element.AnnotationMirrors#sameAnnotation(AnnotationMirror, AnnotationMirror, Predicate)}
+   * method.</p>
    *
-   * @return a {@link List} of interceptor bindings
+   * <p>This implementation eliminates duplicates as calculated via the {@link
+   * org.microbean.construct.element.AnnotationMirrors#sameAnnotation(AnnotationMirror, AnnotationMirror, Predicate)}
+   * method.</p>
    *
-   * @exception NullPointerException if {@code c} is {@code null}
+   * <p>This implementation considers interceptor bindings to be <dfn>transitive</dfn>. Consequently, the returned
+   * {@link List} may be greater in {@linkplain List#size() size} than the supplied {@link Collection}.</p>
+   *
+   * @param as a non-{@code null}, determinate {@link Collection} of {@link AnnotationMirror}s
+   *
+   * @return a non-{@code null}, determinate, immutable {@link List} of {@link AnnotationMirror} instances drawn from
+   * the supplied {@link Collection} that were {@linkplain #interceptorBinding(AnnotationMirror) deemed to be
+   * interceptor bindings}
+   *
+   * @exception NullPointerException if {@code as} is {@code null}
+   *
+   * @see #interceptorBinding(AnnotationMirror)
+   *
+   * @see org.microbean.construct.element.AnnotationMirrors#sameAnnotation(AnnotationMirror, AnnotationMirror,
+   * Predicate)
    */
-  public static final List<Attributes> interceptorBindings(final Collection<? extends Attributes> c) {
-    if (c.isEmpty()) {
+  public List<AnnotationMirror> interceptorBindings(final Collection<? extends AnnotationMirror> as) {
+    if (as.isEmpty()) {
       return List.of();
     }
-    final ArrayList<Attributes> list = new ArrayList<>(c.size());
-    for (final Attributes a : c) {
-      if (interceptorBinding(a)) {
-        list.add(a);
-      }
-    }
-    list.trimToSize();
-    return unmodifiableList(list);
+    final List<AnnotationMirror> seen = new ArrayList<>(as.size()); // size is arbitrary
+    return
+      streamBreadthFirst(as)
+      .filter(a0 -> {
+          for (final AnnotationMirror a1 : seen) {
+            if (sameAnnotation(a0, a1, this.annotationElementInclusionPredicate)) {
+              return false; // we included it already
+            }
+          }
+          return this.interceptorBinding(a0) && seen.add(a0);
+        })
+      .toList();
   }
 
-  /**
-   * Returns a {@link Attributes} representing a <dfn>target class</dfn> interceptor binding.
-   *
-   * @param type the target class name; must not be {@code null}
-   *
-   * @return a {@link Attributes} representing a <dfn>target class</dfn> interceptor binding; never {@code null}
-   *
-   * @exception NullPointerException if {@code type} is {@code null}
-   */
-  public static final Attributes targetClassInterceptorBinding(final String type) {
-    return Attributes.of("TargetClass", Map.of("class", StringValue.of(type)), Map.of(), Map.of("TargetClass", INTERCEPTOR_BINDING_LIST));
-  }
-
-  /**
-   * Returns {@code true} if and only if the supplied {@link Attributes} is a <dfn>target class</dfn> interceptor
-   * binding.
-   *
-   * @param a a {@link Attributes}; must not be {@code null}
-   *
-   * @return {@code true} if and only if the supplied {@link Attributes} is a <dfn>target class</dfn> interceptor
-   * binding
-   *
-   * @exception NullPointerException if {@code a} is {@code null}
-   */
-  // Is a a TargetClass interceptor binding?
-  public static final boolean targetClassInterceptorBinding(final Attributes a) {
-    return a.name().equals("TargetClass") && interceptorBinding(a);
+  private static final <X> boolean returnTrue(final X ignored) {
+    return true;
   }
 
 }
