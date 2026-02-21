@@ -1,6 +1,6 @@
 /* -*- mode: Java; c-basic-offset: 2; indent-tabs-mode: nil; coding: utf-8-unix -*-
  *
- * Copyright © 2025 microBean™.
+ * Copyright © 2025–2026 microBean™.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -17,9 +17,14 @@ import java.util.SequencedSet;
 
 import java.util.function.Function;
 
+import javax.lang.model.AnnotatedConstruct;
+
+import javax.lang.model.element.Element;
+
+import javax.lang.model.type.TypeMirror;
+
+import org.microbean.assign.Annotated;
 import org.microbean.assign.Assignment;
-import org.microbean.assign.AttributedElement;
-import org.microbean.assign.AttributedType;
 
 import org.microbean.bean.Creation;
 import org.microbean.bean.Destruction;
@@ -37,12 +42,12 @@ class DelegatingProducer<I> implements Producer<I> {
   }
 
   @Override // Producer<I>
-  public SequencedSet<? extends Assignment<?>> assign(final Function<? super AttributedType, ?> f) {
+  public SequencedSet<? extends Assignment<?>> assign(final Function<? super Annotated<? extends AnnotatedConstruct>, ?> f) {
     return this.delegate.assign(f);
   }
 
   @Override // Producer<I>
-  public SequencedSet<AttributedElement> dependencies() {
+  public SequencedSet<? extends Annotated<? extends Element>> dependencies() {
     return this.delegate.dependencies();
   }
 
@@ -52,7 +57,7 @@ class DelegatingProducer<I> implements Producer<I> {
   }
 
   @Override // Producer<I>
-  public SequencedSet<AttributedElement> initializationDependencies() {
+  public SequencedSet<? extends Annotated<? extends Element>> initializationDependencies() {
     return this.delegate.initializationDependencies();
   }
 
@@ -67,7 +72,7 @@ class DelegatingProducer<I> implements Producer<I> {
   }
 
   @Override // Producer<I>
-  public SequencedSet<AttributedElement> productionDependencies() {
+  public SequencedSet<? extends Annotated<? extends Element>> productionDependencies() {
     return this.delegate.productionDependencies();
   }
 

@@ -1,6 +1,6 @@
 /* -*- mode: Java; c-basic-offset: 2; indent-tabs-mode: nil; coding: utf-8-unix -*-
  *
- * Copyright © 2025 microBean™.
+ * Copyright © 2025–2026 microBean™.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -14,17 +14,13 @@
 package org.microbean.producer;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Objects;
 import java.util.Set;
 import java.util.SequencedSet;
-import java.util.StringJoiner;
 
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -32,10 +28,12 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.QualifiedNameable;
+import javax.lang.model.element.TypeElement;
 
 import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
@@ -43,14 +41,8 @@ import javax.lang.model.type.IntersectionType;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.type.TypeVariable;
 
+import org.microbean.assign.Annotated;
 import org.microbean.assign.Assignment;
-import org.microbean.assign.AttributedElement;
-import org.microbean.assign.AttributedType;
-
-import org.microbean.attributes.ArrayValue;
-import org.microbean.attributes.Attributes;
-import org.microbean.attributes.ListValue;
-import org.microbean.attributes.Value;
 
 import org.microbean.bean.Creation;
 import org.microbean.bean.Destruction;
@@ -64,6 +56,8 @@ import org.microbean.interceptor.InterceptionFunction;
 import org.microbean.interceptor.InterceptorMethod;
 
 import static java.util.Collections.synchronizedMap;
+import static java.util.Collections.unmodifiableList;
+import static java.util.Collections.unmodifiableMap;
 import static java.util.Collections.unmodifiableSequencedSet;
 
 import static java.util.HashMap.newHashMap;
@@ -97,7 +91,7 @@ public class InterceptingProducer<I> extends DelegatingProducer<I> {
             AroundInvokeInterceptorMethodType.INSTANCE,
             PreDestroyInterceptorMethodType.INSTANCE);
 
-  private static final Map<Id, Map<ExecutableElement, Set<Attributes>>> ibs = new ConcurrentHashMap<>();
+  private static final Map<Id, Map<ExecutableElement, Set<AnnotationMirror>>> ibs = new ConcurrentHashMap<>();
 
   private static final Map<Destruction, BiConsumer<? super Object, Destruction>> bcs = synchronizedMap(newHashMap(100));
 
@@ -107,8 +101,12 @@ public class InterceptingProducer<I> extends DelegatingProducer<I> {
    */
 
 
-  private final Qualifiers qualifiers;
-  
+  private final Domain domain;
+
+  private final AnnotationMirror anyQualifier;
+
+  private final InterceptorBindings interceptorBindings;
+
   // i.e. the TypeMirror corresponding to org.microbean.producer.Interceptor.class
   private final TypeMirror interceptorType;
 
@@ -123,23 +121,28 @@ public class InterceptingProducer<I> extends DelegatingProducer<I> {
   /**
    * Creates a new {@link InterceptingProducer}.
    *
-   * @param domain a {@link Domain}; must not be {@code null}
+   * @param domain a non-{@code null} {@link Domain}
    *
-   * @param qualifiers a {@link Qualifiers}; must not be {@code null}
+   * @param qualifiers a non-{@code null} {@link Qualifiers}
    *
-   * @param delegate a {@link Producer} to which ultimate production will be delegated; must not be {@code null}
+   * @param interceptorBindings a non-{@code null} {@link InterceptorBindings}
    *
-   * @param proxier an {@link InterceptionProxier}; must not be {@code null}
+   * @param delegate a non-{@code null} {@link Producer} to which ultimate production will be delegated
+   *
+   * @param proxier a non-{@code null} {@link InterceptionProxier}
    *
    * @exception NullPointerException if any argument is {@code null}
    */
   public InterceptingProducer(final Domain domain,
                               final Qualifiers qualifiers,
+                              final InterceptorBindings interceptorBindings,
                               final Producer<I> delegate,
                               final InterceptionProxier proxier) {
     super(delegate);
-    this.qualifiers = requireNonNull(qualifiers, "qualifiers");
     this.interceptorType = domain.declaredType(Interceptor.class.getCanonicalName());
+    this.domain = domain;
+    this.anyQualifier = qualifiers.anyQualifier();
+    this.interceptorBindings = requireNonNull(interceptorBindings, "interceptorBindings");
     this.proxier = requireNonNull(proxier, "proxier");
   }
 
@@ -150,7 +153,7 @@ public class InterceptingProducer<I> extends DelegatingProducer<I> {
 
 
   @Override // DelegatingProducer<I>
-  public final SequencedSet<AttributedElement> dependencies() {
+  public final SequencedSet<? extends Annotated<? extends Element>> dependencies() {
     return super.dependencies();
   }
 
@@ -172,8 +175,8 @@ public class InterceptingProducer<I> extends DelegatingProducer<I> {
     }
     final Id id = c.id();
 
-    final Map<ExecutableElement, Set<Attributes>> ibsByMethod =
-      ibs.computeIfAbsent(id, InterceptingProducer::interceptorBindingsByMethod);
+    final Map<ExecutableElement, Set<AnnotationMirror>> ibsByMethod =
+      ibs.computeIfAbsent(id, this::interceptorBindingsByMethod);
     if (ibsByMethod.isEmpty()) {
       // No interceptions. Bail out.
       return super.produce(c);
@@ -181,7 +184,7 @@ public class InterceptingProducer<I> extends DelegatingProducer<I> {
 
     final Map<ExecutableElement, List<InterceptorMethod>> interceptorMethodsByMethod = newHashMap(13);
     final Map<InterceptorMethodType, Set<ExecutableElement>> methodsByInterceptorType = newHashMap(5);
-    for (final Entry<ExecutableElement, Set<Attributes>> e : ibsByMethod.entrySet()) {
+    for (final Entry<ExecutableElement, Set<AnnotationMirror>> e : ibsByMethod.entrySet()) {
       for (final Interceptor interceptor : interceptors(e.getValue(), c)) {
         for (final InterceptorMethodType type : TYPES) {
           final Collection<? extends InterceptorMethod> interceptorMethods = interceptor.interceptorMethods(type);
@@ -253,26 +256,26 @@ public class InterceptingProducer<I> extends DelegatingProducer<I> {
   private final Supplier<I> aroundConstructsSupplier(final Id id,
                                                      final Collection<? extends InterceptorMethod> constructorInterceptorMethods,
                                                      final ReferencesSelector rs) {
-    final SequencedSet<? extends AttributedElement> pdeps = this.productionDependencies();
-    final SequencedSet<? extends AttributedElement> ideps = this.initializationDependencies();
+    final SequencedSet<? extends Annotated<? extends Element>> pdeps = this.productionDependencies();
+    final SequencedSet<? extends Annotated<? extends Element>> ideps = this.initializationDependencies();
     final InterceptionFunction creationFunction =
       ofConstruction(constructorInterceptorMethods,
                      (ignored, argumentsArray) -> {
                        final SequencedSet<Assignment<?>> assignments = new LinkedHashSet<>();
                        int i = 0;
-                       for (final AttributedElement pdep : pdeps) {
+                       for (final Annotated<? extends Element> pdep : pdeps) {
                          assignments.add(new Assignment<>(pdep, argumentsArray[i++]));
                        }
-                       for (final AttributedElement idep : ideps) {
-                         assignments.add(new Assignment<>(idep, rs.reference(idep.attributedType())));
+                       for (final Annotated<? extends Element> idep : ideps) {
+                         assignments.add(new Assignment<>(idep, rs.reference(idep)));
                        }
                        return this.produce(id, unmodifiableSequencedSet(assignments));
                      });
     return () -> {
       final Object[] arguments = new Object[pdeps.size()];
       int i = 0;
-      for (final AttributedElement pdep : pdeps) {
-        arguments[i++] = rs.reference(pdep.attributedType());
+      for (final Annotated<? extends Element> pdep : pdeps) {
+        arguments[i++] = rs.reference(pdep);
       }
       return (I)creationFunction.apply(arguments);
     };
@@ -292,15 +295,38 @@ public class InterceptingProducer<I> extends DelegatingProducer<I> {
     return aroundInvokesByMethod.isEmpty() ? s : () -> this.proxier.interceptionProxy(id, s, aroundInvokesByMethod);
   }
 
-  private final Iterable<Interceptor> interceptors(final Collection<? extends Attributes> bindingsSet,
+  private final Map<ExecutableElement, Set<AnnotationMirror>> interceptorBindingsByMethod(final Collection<? extends ExecutableElement> ees) {
+    if (ees.isEmpty()) {
+      return Map.of();
+    }
+    // Precondition: ees contains only CONSTRUCTOR and METHOD kinds
+    final Map<ExecutableElement, Set<AnnotationMirror>> m = newHashMap(ees.size());
+    for (final ExecutableElement ee : ees) {
+      m.put(ee, Set.copyOf(this.interceptorBindings.interceptorBindings(ee.getAnnotationMirrors())));
+    }
+    return m.isEmpty() ? Map.of() : unmodifiableMap(m);
+  }
+
+  private final Map<ExecutableElement, Set<AnnotationMirror>> interceptorBindingsByMethod(final Id id) {
+    return this.interceptorBindingsByMethod(id.types().get(0));
+  }
+
+  private final Map<ExecutableElement, Set<AnnotationMirror>> interceptorBindingsByMethod(final TypeMirror t) {
+    return switch (t.getKind()) {
+    case DECLARED -> this.interceptorBindingsByMethod(constructorsAndMethods(this.domain.allMembers((TypeElement)((DeclaredType)t).asElement())));
+    default -> Map.of();
+    };
+  }
+
+  private final Iterable<Interceptor> interceptors(final Collection<? extends AnnotationMirror> bindingsSet,
                                                    final ReferencesSelector rs) {
     if (bindingsSet.isEmpty()) {
       return List.of();
     }
-    final List<Attributes> attributes = new ArrayList<>(bindingsSet.size() + 1); // + 1: reserve space for @Any
+    final List<AnnotationMirror> attributes = new ArrayList<>(bindingsSet.size() + 1); // + 1: reserve space for @Any
     attributes.addAll(bindingsSet);
-    attributes.add(this.qualifiers.anyQualifier());
-    return rs.references(new AttributedType(this.interceptorType, attributes));
+    attributes.add(this.anyQualifier);
+    return rs.references(Annotated.of(this.domain.annotate(attributes, this.interceptorType)));
   }
 
 
@@ -309,86 +335,17 @@ public class InterceptingProducer<I> extends DelegatingProducer<I> {
    */
 
 
-  private static final List<ExecutableElement> constructorsAndMethods(final TypeMirror t) {
-    return t instanceof DeclaredType dt ? constructorsAndMethods(dt.asElement()) : List.of();
-  }
-
-  private static final List<ExecutableElement> constructorsAndMethods(final Element e) {
-    final List<? extends Element> enclosedElements = e.getEnclosedElements();
-    if (enclosedElements.isEmpty()) {
+  private static final List<ExecutableElement> constructorsAndMethods(final Collection<? extends Element> elements) {
+    if (elements.isEmpty()) {
       return List.of();
     }
-    final List<ExecutableElement> ees = new ArrayList<>(enclosedElements.size());
-    for (final Element ee : enclosedElements) {
-      switch (ee.getKind()) {
-      case CONSTRUCTOR, METHOD -> ees.add((ExecutableElement)ee);
+    final List<ExecutableElement> ees = new ArrayList<>(elements.size());
+    for (final Element e : elements) {
+      switch (e.getKind()) {
+      case CONSTRUCTOR, METHOD -> ees.add((ExecutableElement)e);
       }
     }
-    return ees.isEmpty() ? List.of() : Collections.unmodifiableList(ees);
-  }
-
-  private static final Attributes interceptionSpecification(final Collection<? extends Attributes> c) {
-    for (final Attributes a : c) {
-      if (a.name().equals("InterceptionSpecification")) {
-        return a;
-      }
-    }
-    return null;
-  }
-
-  private static final Map<ExecutableElement, Set<Attributes>> interceptorBindingsByMethod(final Id id) {
-    return interceptorBindingsByMethod(interceptionSpecification(id.attributes()), id.types().get(0));
-  }
-
-  private static final Map<ExecutableElement, Set<Attributes>> interceptorBindingsByMethod(final Attributes interceptionSpecification,
-                                                                                           final TypeMirror t) {
-    return interceptorBindingsByMethod(interceptionSpecification, constructorsAndMethods(t));
-  }
-
-  @SuppressWarnings("unchecked")
-  private static final Map<ExecutableElement, Set<Attributes>> interceptorBindingsByMethod(final Attributes interceptionSpecification,
-                                                                                           final Collection<? extends ExecutableElement> ees) {
-    if (interceptionSpecification == null || ees == null || ees.isEmpty() || interceptionSpecification.values().isEmpty()) {
-      return Map.of();
-    }
-    final Map<ExecutableElement, Set<Attributes>> ibsByMethod = newHashMap(13);
-    for (final ExecutableElement ee : ees) {
-      final StringBuilder sb = new StringBuilder();
-      sb.append(ee.getSimpleName().toString());
-      final StringJoiner sj = new StringJoiner(", ", "(", ")");
-      for (final Element p : ee.getParameters()) {
-        sj.add(name(p.asType()));
-      }
-      sb.append(sj.toString());
-      // (sb is now Javadoc-ish: frob(java.lang.String[], java.lang.Object) etc.)
-      switch (interceptionSpecification.values().get(sb.toString())) {
-      case Attributes a -> ibsByMethod.put(ee, Set.of(a));
-      case ArrayValue<?> av -> ibsByMethod.put(ee, Set.copyOf(Arrays.asList(((ArrayValue<Attributes>)av).value())));
-      case ListValue<?> lv -> ibsByMethod.put(ee, Set.copyOf(((ListValue<Attributes>)lv).value()));
-      default -> {}
-      };
-    }
-    return ibsByMethod.isEmpty() ? Map.of() : Collections.unmodifiableMap(ibsByMethod);
-  }
-
-  // Not suitable for general use.
-  private static final String name(final TypeMirror t) {
-    return switch (t.getKind()) {
-    case ARRAY -> name(((ArrayType)t).getComponentType()) + "[]";
-    case BOOLEAN -> "boolean";
-    case BYTE -> "byte";
-    case CHAR -> "char";
-    case DECLARED -> ((QualifiedNameable)((DeclaredType)t).asElement()).getQualifiedName().toString();
-    case DOUBLE -> "double";
-    case FLOAT -> "float";
-    case INT -> "int";
-    case INTERSECTION -> name(((IntersectionType)t).getBounds().get(0));
-    case LONG -> "long";
-    case SHORT -> "short";
-    case TYPEVAR -> name(((TypeVariable)t).getUpperBound());
-    case VOID -> "void";
-    default -> throw new IllegalArgumentException("t: " + t);
-    };
+    return ees.isEmpty() ? List.of() : unmodifiableList(ees);
   }
 
   private static final <I> Supplier<I> postConstructsSupplier(final Supplier<I> s,

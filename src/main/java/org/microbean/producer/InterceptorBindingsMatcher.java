@@ -1,6 +1,6 @@
 /* -*- mode: Java; c-basic-offset: 2; indent-tabs-mode: nil; coding: utf-8-unix -*-
  *
- * Copyright © 2024–2025 microBean™.
+ * Copyright © 2024–2026 microBean™.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -16,14 +16,19 @@ package org.microbean.producer;
 import java.util.Collection;
 import java.util.List;
 
-import org.microbean.assign.AttributedType;
-import org.microbean.assign.Matcher;
+import javax.lang.model.AnnotatedConstruct;
 
-import org.microbean.attributes.Attributes;
+import javax.lang.model.element.AnnotationMirror;
+
+import org.microbean.assign.Annotated;
+import org.microbean.assign.Matcher;
 
 import org.microbean.bean.Id;
 
-import static org.microbean.producer.InterceptorBindings.anyInterceptorBinding;
+import static java.util.Objects.requireNonNull;
+
+import static org.microbean.construct.element.AnnotationMirrors.containsAll;
+import static org.microbean.construct.element.AnnotationMirrors.sameAnnotation;
 
 /**
  * A {@link Matcher} encapsulating <a
@@ -36,108 +41,40 @@ import static org.microbean.producer.InterceptorBindings.anyInterceptorBinding;
  */
 // TODO: Now that interceptors have been effectively refactored out into microbean-producer, this might be able to move
 // there, or some other microbean-producer-dependent project.
-public class InterceptorBindingsMatcher implements Matcher<AttributedType, Id> {
+public class InterceptorBindingsMatcher implements Matcher<Annotated<? extends AnnotatedConstruct>, Id> {
+
+  private final InterceptorBindings ib;
 
   /**
    * Creates a new {@link InterceptorBindingsMatcher}.
+   *
+   * @param ib a non-{@code null} {@link InterceptorBindings}
+   *
+   * @exception NullPointerException if {@code ib} is {@code null}
    */
-  public InterceptorBindingsMatcher() {
+  public InterceptorBindingsMatcher(final InterceptorBindings ib) {
     super();
+    this.ib = requireNonNull(ib, "ib");
   }
 
-  /**
-   * Returns {@code true} if and only if either (a) both the collection of {@linkplain
-   * InterceptorBindings#interceptorBindings(Collection) interceptor bindings present} in {@code receiverAttributes} and
-   * the collection of {@linkplain InterceptorBindings#interceptorBindings(Collection) interceptor bindings present} in
-   * {@code payloadAttributes} are {@linkplain Collection#isEmpty() empty}, or (b) if the collection of {@linkplain
-   * InterceptorBindings#interceptorBindings(Collection) interceptor bindings present} in {@code payloadAttributes} has
-   * only one element and that element {@linkplain InterceptorBindings#anyInterceptorBinding(Attributes) is the
-   * <dfn>any</dfn> interceptor binding}, or (c) the sizes of the collection of {@linkplain
-   * InterceptorBindings#interceptorBindings(Collection) interceptor bindings present} in {@code receiverAttributes} and
-   * the collection of {@linkplain InterceptorBindings#interceptorBindings(Collection) interceptor bindings present} in
-   * {@code payloadAttributes} are the same and the collection of {@linkplain
-   * InterceptorBindings#interceptorBindings(Collection) interceptor bindings present} in {@code receiverAttributes}
-   * {@linkplain Collection#containsAll(Collection) contains all} the collection of {@linkplain
-   * InterceptorBindings#interceptorBindings(Collection) interceptor bindings present} in {@code payloadAttributes} and
-   * the collection of {@linkplain InterceptorBindings#interceptorBindings(Collection) interceptor bindings present} in
-   * {@code payloadAttributes} {@linkplain Collection#containsAll(Collection) contains all} the collection of
-   * {@linkplain InterceptorBindings#interceptorBindings(Collection) interceptor bindings present} in {@code
-   * receiverAttributes}.
-   *
-   * @param receiverAttributes a {@link Collection} of {@link Attributes}s; must not be {@code null}
-   *
-   * @param payloadAttributes a {@link Collection} of {@link Attributes}s; must not be {@code null}
-   *
-   * @return {@code true} if and only if either (a) both the collection of {@linkplain
-   * InterceptorBindings#interceptorBindings(Collection) interceptor bindings present} in {@code receiverAttributes} and
-   * the collection of {@linkplain InterceptorBindings#interceptorBindings(Collection) interceptor bindings present} in
-   * {@code payloadAttributes} are {@linkplain Collection#isEmpty() empty}, or (b) if the collection of {@linkplain
-   * InterceptorBindings#interceptorBindings(Collection) interceptor bindings present} in {@code payloadAttributes} has
-   * only one element and that element {@linkplain InterceptorBindings#anyInterceptorBinding(Attributes) is the
-   * <dfn>any</dfn> interceptor binding}, or (c) the sizes of the collection of {@linkplain
-   * InterceptorBindings#interceptorBindings(Collection) interceptor bindings present} in {@code receiverAttributes} and
-   * the collection of {@linkplain InterceptorBindings#interceptorBindings(Collection) interceptor bindings present} in
-   * {@code payloadAttributes} are the same and the collection of {@linkplain
-   * InterceptorBindings#interceptorBindings(Collection) interceptor bindings present} in {@code receiverAttributes}
-   * {@linkplain Collection#containsAll(Collection) contains all} the collection of {@linkplain
-   * InterceptorBindings#interceptorBindings(Collection) interceptor bindings present} in {@code payloadAttributes} and
-   * the collection of {@linkplain InterceptorBindings#interceptorBindings(Collection) interceptor bindings present} in
-   * {@code payloadAttributes} {@linkplain Collection#containsAll(Collection) contains all} the collection of
-   * {@linkplain InterceptorBindings#interceptorBindings(Collection) interceptor bindings present} in {@code
-   * receiverAttributes}
-   *
-   * @exception NullPointerException if either {@code receiverAttributes} or {@code payloadAttributes} is {@code null}
-   */
-  public final boolean test(final Collection<? extends Attributes> receiverAttributes,
-                            final Collection<? extends Attributes> payloadAttributes) {
-    final Collection<? extends Attributes> payloadBindings = interceptorBindings(payloadAttributes);
+  private final boolean test(final Collection<? extends AnnotationMirror> receiverAttributes,
+                             final Collection<? extends AnnotationMirror> payloadAttributes) {
+    final Collection<? extends AnnotationMirror> payloadBindings = this.ib.interceptorBindings(payloadAttributes);
     if (payloadBindings.isEmpty()) {
-      return interceptorBindings(receiverAttributes).isEmpty();
-    } else if (payloadBindings.size() == 1 && anyInterceptorBinding(payloadBindings.iterator().next())) {
+      return this.ib.interceptorBindings(receiverAttributes).isEmpty();
+    } else if (payloadBindings.size() == 1 && this.ib.anyInterceptorBinding(payloadBindings.iterator().next())) {
       return true;
     }
-    final Collection<? extends Attributes> receiverBindings = interceptorBindings(receiverAttributes);
+    final Collection<? extends AnnotationMirror> receiverBindings = this.ib.interceptorBindings(receiverAttributes);
     return
       receiverBindings.size() == payloadBindings.size() &&
-      receiverBindings.containsAll(payloadBindings) &&
-      payloadBindings.containsAll(receiverBindings);
+      containsAll(receiverBindings, payloadBindings) &&
+      containsAll(payloadBindings, receiverBindings);
   }
 
-  /**
-   * Calls the {@link #test(Collection, Collection)} method with the supplied {@link AttributedType}'s {@linkplain
-   * AttributedType#attributes() attributes} and the supplied {@link Id}'s {@linkplain Id#attributes() attributes} and
-   * returns the result.
-   *
-   * @param t an {@link AttributedType}; must not be {@code null}
-   *
-   * @param id an {@link Id}; must not be {@code null}
-   *
-   * @return the result of calling the {@link #test(Collection, Collection)} method with the supplied {@link
-   * AttributedType}'s {@linkplain AttributedType#attributes() attributes} and the supplied {@link Id}'s {@linkplain
-   * Id#attributes() attributes}
-   *
-   * @see #test(Collection, Collection)
-   */
-  @Override
-  public final boolean test(final AttributedType t, final Id id) {
-    return this.test(t.attributes(), id.attributes());
-  }
-
-  /**
-   * Given a {@link Collection} of {@link Attributes}s, returns an immutable {@link Collection} consisting of those
-   * {@link Attributes} instances that are deemed to be interceptor bindings.
-   *
-   * <p>The default implementation of this method returns the value of an invocation of the {@link
-   * InterceptorBindings#interceptorBindings(Collection)} method.</p>
-   *
-   * @param as a {@link Collection}; must not be {@code null}
-   *
-   * @return a {@link List} of interceptor bindings; never {@code null}
-   *
-   * @exception NullPointerException if {@code as} is {@code null}
-   */
-  protected Collection<? extends Attributes> interceptorBindings(final Collection<? extends Attributes> as) {
-    return InterceptorBindings.interceptorBindings(as);
+  @Override // Matcher<Annotated<? extends AnnotatedConstruct>, Id>
+  public final boolean test(final Annotated<? extends AnnotatedConstruct> aac, final Id id) {
+    return this.test(aac.annotations(), id.annotations());
   }
 
 }
